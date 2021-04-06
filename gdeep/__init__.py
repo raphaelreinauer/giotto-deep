@@ -8,5 +8,6 @@ __all__ = [
     'utility',
     'decision_boundary',
     'plotting',
-    'intersection_homology'
+    'intersection_homology',
+    'smale_quiver'
     ] 
