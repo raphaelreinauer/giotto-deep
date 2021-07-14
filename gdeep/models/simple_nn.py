@@ -42,9 +42,9 @@ class FFNet(nn.Module):
                         "self.layer" + str(i) + "(x_cont)" + ")"
                 # put softmax in last layer
                 elif i == len(self.arch) - 2:
-                    val = "x"+str(i)+"=F.softmax(" + \
+                    val = "x"+str(i)+"=" + \
                         "self.layer"+str(i)+"(x" + str(i - 1) + \
-                            ")" + ",dim=-1)"
+                            ")" + ""
                 else:
                     val = "x" + str(i) + "=F.relu(" + \
                         "self.layer" + str(i) + "(x" + \
