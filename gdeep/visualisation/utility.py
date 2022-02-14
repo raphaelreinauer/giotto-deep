@@ -10,12 +10,18 @@ def plotly2tensor(fig) -> torch.Tensor:
     """convert Plotly fig to an array.
 
     Args:
-        fig (plotly GraphicObject)
+        fig (plotly GraphicObject):
+            figure to convert to tensor
 
     Returns:
-        Tensor
+        Tensor:
+            the tensor discretisation of the
+            figure
     """
-    write_image(fig, "deleteme.jpeg", format="jpeg")
+    try:
+        write_image(fig, "deleteme.jpeg", format="jpeg", engine="orca")
+    except ValueError:
+        write_image(fig, "deleteme.jpeg", format="jpeg")
     img = Image.open("deleteme.jpeg")
     arr = np.asarray(img).copy()
     os.remove("deleteme.jpeg")

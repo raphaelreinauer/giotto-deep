@@ -4,6 +4,10 @@ from ..analysis.decision_boundary import GradientFlowDecisionBoundaryCalculator
 from ..analysis.decision_boundary import UniformlySampledPoint
 from . import SaveLayerOutput
 
+if torch.cuda.is_available():
+    DEVICE = torch.device("cuda")
+else:
+    DEVICE = torch.device("cpu")
 
 class ModelExtractor:
     """This class wraps nn.Modules to extract
@@ -11,11 +15,14 @@ class ModelExtractor:
 
     Args:
         model (nn.Module):
+            standard torch module
         loss_fn (Callable):
+            loss function
     """
 
     def __init__(self, model, loss_fn):
-        self.model = model
+        # self.model = model
+        self.model = model.to(DEVICE)
         self.loss_fn = loss_fn
 
     def get_decision_boundary(self, input_example, n_epochs=100,
@@ -24,13 +31,16 @@ class ModelExtractor:
         with self.loss_fn
         
         Args:
-            n_epochs (int): number of training cycles to find
+            n_epochs (int):
+                number of training cycles to find
                 the decision boundary
-            input_example (Tensor): an example of a single input,
+            input_example (Tensor):
+                an example of a single input,
                 to extract the dimensions of the feature space
 
         Returns:
-            Tensor: the pointcloud defining the decision
+            Tensor:
+                the pointcloud defining the decision
                 boundary with dimensions `(n_samples, n_features)`
         """
         input_dim = input_example.flatten().shape[0]
@@ -40,9 +50,12 @@ class ModelExtractor:
         sample_points_tensor = torch.from_numpy(us()).to(torch.float)
         # reshape points as example
         sample_points_tensor = \
-            sample_points_tensor.reshape(-1, *input_example.shape)
+            sample_points_tensor.reshape(-1, *input_example.shape).to(DEVICE)
+        
+        sample_points_tensor = sample_points_tensor.to(DEVICE)
         # print(sample_points_tensor.shape)
         # Using new gradient flow implementation
+        self.model.train()
         gf = GradientFlowDecisionBoundaryCalculator(model=self.model,
                                                     initial_points=
                                                     sample_points_tensor,
@@ -58,11 +71,13 @@ class ModelExtractor:
         `X`
 
         Args:
-            input_example (Tensor): an example of an input or
+            input_example (Tensor):
+                an example of an input or
                 an input batch of which to compute the activation(s)
 
         Returns:
-            list: list of the activation Tensors
+            list:
+                list of the activation Tensors
         """
 
         saved_output_layers = SaveLayerOutput()
@@ -74,10 +89,8 @@ class ModelExtractor:
             hook_handles.append(handle)
 
         self.model.eval()
-        if torch.cuda.is_available():
-            self.model(X.cuda())
-        else:
-            self.model(X)
+        self.model(X.to(DEVICE))
+
 
         for handle in hook_handles:
             handle.remove()
@@ -89,7 +102,8 @@ class ModelExtractor:
         """Returns parameters of layers
 
         Returns:
-            dict: dict of tensors, corresponding
+            dict:
+                dict of tensors, corresponding
                 to the layer parameters. The key of
                 the dict is the name of the parameters
         """
@@ -98,6 +112,24 @@ class ModelExtractor:
         # for name, layer_param in self.model.named_parameters():
         #    layer_data[name]=layer_param.data
         return self.model.state_dict()
+        
+    def get_layers_grads(self) -> dict:
+        """Returns the gradients of each layer
+
+        Returns:
+            list:
+                list of tensors, corresponding
+                to the layer gradients (weights and biases!).
+        """
+
+        # layer_data = dict()
+        # for name, layer_param in self.model.named_parameters():
+        #    layer_data[name]=layer_param.data
+        sdict = self.model.parameters()
+        output = []
+        for v in sdict:
+            output.append(v.grad)
+        return output
 
     def get_gradients(self, x, **kwargs) -> tuple:
         """Returns the **averaged gradient** of the self.loss_fn.
@@ -105,13 +137,20 @@ class ModelExtractor:
         use the keywords argument `target=`
 
         Args:
-            x (Tensor): point at which to compute grad
+            x (Tensor):
+                point at which to compute grad
+
         Returns:
-            tensor: the
-            list: list of tensors, corresponding
+            tensor:
+                the gradients
+            list:
+                list of tensors, corresponding
                 to the gradient of the weights.
         """
+        
         x.requires_grad = True
+        x = x.to(DEVICE)
+        kwargs["target"] = kwargs["target"].to(DEVICE)
         loss = self.loss_fn(self.model(x),
                             **kwargs)
 

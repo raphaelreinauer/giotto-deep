@@ -2,12 +2,14 @@
 
 import torch
 import torch.optim
-
 from typing import Callable
-
 from abc import ABC, abstractmethod
-
 from torchdiffeq import odeint
+
+if torch.cuda.is_available():
+    DEVICE = torch.device("cuda")
+else:
+    DEVICE = torch.device("cpu")
 
 
 class DecisionBoundaryCalculator(ABC):
@@ -27,7 +29,8 @@ class DecisionBoundaryCalculator(ABC):
         """Return current state and does not make a step
 
         Returns:
-            torch.tensor: current estimate of the decision boundary
+            torch.tensor:
+                current estimate of the decision boundary
         """
         pass
 
@@ -58,11 +61,13 @@ class GradientFlowDecisionBoundaryCalculator(DecisionBoundaryCalculator):
     Computes Decision Boundary using the gradient flow method
 
     Args:
-        model (Callable[[torch.Tensor], torch.Tensor]): Function that maps
-            a `torch.Tensor` of shape (N, D_in) to a tensor either of
+        model (Callable[[torch.Tensor], torch.Tensor]):
+            Function that maps
+            a ``torch.Tensor`` of shape (N, D_in) to a tensor either of
             shape (N) and with values in [0,1] or of shape (N, D_out) with
             values in [0, 1] such that the last axis sums to 1.
-        initial_points (torch.Tensor): `torch.Tensor` of shape (N, D_in)
+        initial_points (torch.Tensor):
+            ``torch.Tensor`` of shape (N, D_in)
         optimizer (Callable[[torch.Tensor], torch.optim.Optimizer]):
             Function returning an optimizer for the params given as an
             argument.
@@ -71,10 +76,9 @@ class GradientFlowDecisionBoundaryCalculator(DecisionBoundaryCalculator):
                  initial_points: torch.Tensor,
                  optimizer: Callable[[list], torch.optim.Optimizer]):
 
-        self.sample_points = initial_points
+        self.sample_points = initial_points.to(DEVICE)
         self.sample_points.requires_grad = True
-
-        output = model(self.sample_points)
+        output = model(self.sample_points).to(DEVICE)
         output_shape = output.size()
 
         if not len(output_shape) in [1, 2]:
@@ -83,7 +87,6 @@ class GradientFlowDecisionBoundaryCalculator(DecisionBoundaryCalculator):
         # to the decision boundary as output.
         new_model = self._convert_to_distance_to_boundary(model, output_shape)
         self.model = lambda x: new_model(x)**2
-
         # Check if self.model has the right output shape
         assert len(self.model(self.sample_points).size()) == 1, \
             f'Output shape is {self.model(self.sample_points).size()}'
@@ -93,13 +96,16 @@ class GradientFlowDecisionBoundaryCalculator(DecisionBoundaryCalculator):
     def step(self, number_of_steps=1):
         """Performs the indicated number of steps towards the decision boundary
         """
-        print("Executing the decison boundary computations:")
+        print("Executing the decision boundary computations:")
         for j in range(number_of_steps):
             print("Step: " + str(j) + "/" + str(number_of_steps),
                   end ='\r')
             self.optimizer.zero_grad()
-            loss = torch.sum(self.model(self.sample_points))
+            loss = torch.sum(self.model(self.sample_points)).to(DEVICE)
             loss.backward()
+            #if DEVICE.type == "xla":
+            #    xm.optimizer_step(self.optimizer, barrier=True)  # Note: Cloud TPU-specific code!
+            #else:
             self.optimizer.step()
 
     def get_decision_boundary(self) -> torch.Tensor:
@@ -120,19 +126,23 @@ class QuasihyperbolicDecisionBoundaryCalculator(DecisionBoundaryCalculator):
                  integrator=None):
         """
         Args:
-            model (Callable[[torch.Tensor], torch.Tensor]): Function that maps
+            model (Callable[[torch.Tensor], torch.Tensor]):
+                Function that maps
                 a `torch.Tensor` of shape (N, D_in) to a tensor either of
                 shape (N) and with values in [0,1] or of shape (N, D_out) with
                 values in [0, 1] such that the last axis sums to 1.
 
-            initial_points (torch.Tensor): `torch.Tensor` of shape (N, D_in)
+            initial_points (torch.Tensor):
+                `torch.Tensor` of shape (N, D_in)
                 containing the starting points.
 
-            initial_vectors(torch.Tensor): `torch.Tensor` of shape (N, D_in)
+            initial_vectors(torch.Tensor):
+                `torch.Tensor` of shape (N, D_in)
                 containing the starting tangent vectors (directions).
                 Prefarably normalized.
 
-            integrator: unused
+            integrator:
+                unused
         """
         self.points = initial_points
 
