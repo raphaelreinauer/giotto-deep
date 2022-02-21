@@ -383,7 +383,6 @@ class Persformer(Module):
             or induced attention with linear complexity (`induced_attention`). Defaults to "pytorch_self_attention_skip".
         layer_norm_pooling (str, optional):
             Use layer norm in the multi-head attention pooling layer. Defaults to "False".
-
     Raises:
         ValueError:
             [description]
