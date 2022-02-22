@@ -3,7 +3,7 @@
     "attention_type": "induced_attention",
     "bias_attention": "True",
     "dim_hidden": 64,
-    "dim_input": 6,
+    "dim_input": 2,
     "dropout_dec": 0.0,
     "dropout_enc": 0.0,
     "implementation": "Persformer",

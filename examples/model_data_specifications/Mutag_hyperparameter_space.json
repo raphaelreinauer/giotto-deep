@@ -8,7 +8,7 @@
         "dropout_dec": [0.0, 0.5, 0.05],
         "dropout_enc": [0.0, 0.5, 0.05],
         "hidden_dim": ["16", "32", "64", "96", "128"],
-        "input_dim": [6],
+        "input_dim": [2],
         "layer_norm": ["True", "False"],
         "layer_norm_pooling": ["True", "False"],
         "n_layer_dec": [1, 5, 1],
