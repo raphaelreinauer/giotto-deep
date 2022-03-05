@@ -6,7 +6,7 @@ import time
 
 path_to_data = join('gdeep', 'extended_persistence', 'tests', 'data')
     
-def test_small_filtered_graph(benchmark):
+def test_small_filtered_graph_gudhi(benchmark):
     # Load filtered graph
     with open(join(path_to_data, 'small_filtered_graph.npy'), 'rb') as f:
         adj_mat = np.load(f)
@@ -17,7 +17,7 @@ def test_small_filtered_graph(benchmark):
     ## Check result
     #assert result ==
 
-def test_medium_filtered_graph(benchmark):
+def test_medium_filtered_graph_gudhi(benchmark):
     # Load filtered graph
     with open(join(path_to_data, 'medium_filtered_graph.npy'), 'rb') as f:
         adj_mat = np.load(f)
@@ -28,7 +28,7 @@ def test_medium_filtered_graph(benchmark):
     ## Check result
     #assert result ==
 
-def test_large_filtered_graph(benchmark):
+def test_large_filtered_graph_gudhi(benchmark):
     # Load filtered graph
     with open(join(path_to_data, 'large_filtered_graph.npy'), 'rb') as f:
         adj_mat = np.load(f)
@@ -39,7 +39,7 @@ def test_large_filtered_graph(benchmark):
     ## Check result
     #assert result ==
 
-def test_xlarge_filtered_graph(benchmark):
+def test_xlarge_filtered_graph_gudhi(benchmark):
     # Load filtered graph
     with open(join(path_to_data, 'large_filtered_graph.npy'), 'rb') as f:
         adj_mat = np.load(f)
