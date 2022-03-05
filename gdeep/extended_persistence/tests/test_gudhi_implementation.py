@@ -34,6 +34,8 @@ def test_large_filtered_graph_gudhi(benchmark):
         adj_mat = np.load(f)
         filtration_vals = np.load(f)
     
+    assert adj_mat.shape[0] == 200
+    
     result = benchmark(graph_extended_persistence_gudhi, *(adj_mat, filtration_vals))
     
     ## Check result
@@ -41,9 +43,10 @@ def test_large_filtered_graph_gudhi(benchmark):
 
 def test_xlarge_filtered_graph_gudhi(benchmark):
     # Load filtered graph
-    with open(join(path_to_data, 'large_filtered_graph.npy'), 'rb') as f:
+    with open(join(path_to_data, 'xlarge_filtered_graph.npy'), 'rb') as f:
         adj_mat = np.load(f)
         filtration_vals = np.load(f)
+    assert adj_mat.shape[0] == 1_000
     
     result = benchmark(graph_extended_persistence_gudhi, *(adj_mat, filtration_vals))
     

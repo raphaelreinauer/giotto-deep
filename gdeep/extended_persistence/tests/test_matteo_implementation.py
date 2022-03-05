@@ -39,13 +39,15 @@ def test_large_filtered_graph_matteo(benchmark):
     ## Check result
     #assert result ==
 
-def test_xlarge_filtered_graph_matteo(benchmark):
-    # Load filtered graph
-    with open(join(path_to_data, 'large_filtered_graph.npy'), 'rb') as f:
-        adj_mat = np.load(f)
-        filtration_vals = np.load(f)
+# Implementation is too slow fort the test
+
+# def test_xlarge_filtered_graph_matteo(benchmark):
+#     # Load filtered graph
+#     with open(join(path_to_data, 'xlarge_filtered_graph.npy'), 'rb') as f:
+#         adj_mat = np.load(f)
+#         filtration_vals = np.load(f)
     
-    result = benchmark(graph_extended_persistence_matteo, *(adj_mat, filtration_vals))
+#     result = benchmark(graph_extended_persistence_matteo, *(adj_mat, filtration_vals))
     
     ## Check result
     #assert result ==
