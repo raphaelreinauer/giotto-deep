@@ -2,7 +2,7 @@ from gdeep.extended_persistence.matteo_implementation import graph_extended_pers
 
 from os.path import join
 import numpy as np
-import time
+import pytest
 
 path_to_data = join('gdeep', 'extended_persistence', 'tests', 'data')
     
@@ -41,6 +41,9 @@ def test_large_filtered_graph_matteo(benchmark):
 
 # Implementation is too slow fort the test
 
+# @pytest.mark.benchmark(
+#     max_time=10.0,
+# )
 # def test_xlarge_filtered_graph_matteo(benchmark):
 #     # Load filtered graph
 #     with open(join(path_to_data, 'xlarge_filtered_graph.npy'), 'rb') as f:

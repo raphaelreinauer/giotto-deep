@@ -15,3 +15,10 @@ for size in sizes:
         np.save(f, adj_mat)
         np.save(f, filtration_vals)
 # %%
+name = "reddit12k_sample_graph_small"
+from scipy.io import loadmat
+adj_mat = np.array(loadmat(name + ".mat")["A"], dtype=np.float32)
+
+with open(name + '.npy', 'wb') as f:
+    np.save(f, adj_mat)
+# %%

@@ -1,5 +1,5 @@
 import numpy as np
-import gudhi as gd
+import gudhi as gd  # type: ignore
 
 def graph_extended_persistence_gudhi(A, filtration_val):
     num_vertices = A.shape[0]
