@@ -31,6 +31,10 @@ examples/*.html
 *.pqt
 data/*
 
+# Video and image files
+*.png
+*.mp4
+
 # Output files
 *.out
 
