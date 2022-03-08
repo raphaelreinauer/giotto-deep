@@ -14,28 +14,76 @@ from gdeep.extended_persistence import HeatKernelSignature
 #%%
 
 def get_local_minima(adj_mat, filtration_vals):
+    """Compute all nodes that have a filtration value that is less than or equal to
+    all the filtration values of its neighbors.
+
+    Args:
+        adj_mat (np.array): adjacenty matrix of the graph
+        filtration_vals (np.array): filtrations values of the nodes
+
+    Returns:
+        np.array: boolean array representing the local minima
+    """
     min_val_nbs = np.min(filtration_vals * (1.0/adj_mat), axis=1)
     return min_val_nbs >= filtration_vals
 
 def get_directed_graph(adj_mat, filtration_vals):
+    """Generated directed graph where the edges are the ones given by the
+    adjacency matrix and the direction of the edges are the ones given by
+    filtration such that an edge is pointing from a vertex with smaller filtration
+    value to a vertex with larger filtration value.
+
+    Args:
+        adj_mat (np.array): adjacenty matrix of the graph
+        filtration_vals (np.array): filtrations values of the nodes
+
+    Returns:
+        nx.DiGraph: directed graph with the direction given by the filtration.
+    """
     return nx.from_numpy_matrix(((filtration_vals * (1.0/adj_mat) < filtration_vals.reshape(-1, 1)).T) * 1,
                                 create_using=nx.DiGraph)
 
-def get_traversed_nodes(adj_mat, filtration_vals):
+def get_visited_nodes(adj_mat, filtration_vals):
+    """Start a graph traversal starting from all nodes which are local minima in the 
+    ascending filtration direction. The traversals passing through the i-th node with the j-th node as
+    starting point are indicated by a value of one in the returned array.
+
+    Args:
+        adj_mat (np.array): adjacenty matrix of the graph
+        filtration_vals (np.array): filtrations values of the nodes
+
+    Returns:
+        np.array: array of traversed nodes.
+    """
     dgraph = get_directed_graph(adj_mat, filtration_vals)
     graph_size = adj_mat.shape[0]
-    traversed_nodes = np.zeros((graph_size, graph_size))
+    visited_nodes = np.zeros((graph_size, graph_size))
     for source in np.argwhere(get_local_minima(adj_mat, filtration_vals)).T[0].tolist():
-        traversed = list(nx.dfs_preorder_nodes(dgraph, source=source))[1:]
-        traversed_nodes[source][traversed] = 1
-    return traversed_nodes
+        visited = list(nx.dfs_preorder_nodes(dgraph, source=source))[1:]
+        visited_nodes[source][visited] = 1
+    return visited_nodes
 
 def compute_death_times(adj_mat, filtration_vals):
-    traversed_nodes = get_traversed_nodes(adj_mat, filtration_vals + 1) * filtration_vals.reshape(-1, 1)
+    """Computes the death times for a all connected compontents corresponding to its generator.
+    These generators are 
+    
+    Args:
+        adj_mat (np.array): adjacenty matrix of the graph
+        filtration_vals (np.array): filtrations values of the nodes
 
-    min_vals = ((traversed_nodes == 0) * max_filtration + traversed_nodes).min(axis=0)
+    Returns:
+        np.array: array of traversed nodes.
+    """
+    # matrix containing all filtration values of the starting points that went through a
+    # given node
+    visited_nodes = get_visited_nodes(adj_mat, filtration_vals + 1) * filtration_vals.reshape(-1, 1)
 
-    death_matrix = traversed_nodes * ((traversed_nodes != 0) & (traversed_nodes > min_vals))
+    # minimal filtration value of the starting points that went through a
+    # given node
+    min_vals = ((visited_nodes == 0) * np.inf + visited_nodes).min(axis=0)
+
+    # 
+    death_matrix = visited_nodes * ((visited_nodes != 0) & (visited_nodes > min_vals))
 
     return (death_matrix != 0).argmax(axis=1)
 # %%
