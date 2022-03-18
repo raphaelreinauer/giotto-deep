@@ -7,7 +7,6 @@ import numpy as np
 
 from time import time
 from os.path import join
-from copy import deepcopy
 
 from gdeep.extended_persistence import HeatKernelSignature
 
@@ -112,16 +111,27 @@ def compute_death_times(adj_mat, filtration_vals):
 
 
 # # %%
-# graph_size = 5
-# adj_mat = np.zeros((graph_size, graph_size))
-# adj_mat[0, 2] = adj_mat[1, 2] = adj_mat[2, 4] = adj_mat[3, 4] = 1
-# adj_mat += adj_mat.T
-# filtration_vals = np.array(list(range(1, graph_size + 1)))
-# max_filtration = filtration_vals.max()
-# graph = nx.from_numpy_matrix(adj_mat)
-# nx.draw(graph, with_labels=True)
-# assert np.count_nonzero(get_local_minima(adj_mat, filtration_vals)) == graph_size - 2
+graph_size = 5
+adj_mat = np.zeros((graph_size, graph_size))
+adj_mat[0, 2] = adj_mat[1, 2] = adj_mat[2, 4] = adj_mat[3, 4] = 1
+adj_mat += adj_mat.T
+filtration_vals = np.array(list(range(1, graph_size + 1)))
+max_filtration = filtration_vals.max()
+graph = nx.from_numpy_matrix(adj_mat)
+nx.draw(graph, with_labels=True)
+assert np.count_nonzero(get_local_minima(adj_mat, filtration_vals)) == graph_size - 2
 
+compute_death_times(adj_mat, filtration_vals)
+
+# %%
+visited_nodes = get_visited_nodes(adj_mat, filtration_vals + 1) * filtration_vals.reshape(-1, 1)
+
+# minimal filtration value of the starting points that went through a
+# given node
+min_vals = ((visited_nodes == 0) * np.inf + visited_nodes).min(axis=0)
+
+# 
+death_matrix = visited_nodes * ((visited_nodes != 0) & (visited_nodes > min_vals))
 
 # # %%
 # from gdeep.extended_persistence.gudhi_implementation import graph_extended_persistence_gudhi
@@ -131,3 +141,5 @@ def compute_death_times(adj_mat, filtration_vals):
 # %timeit x = compute_death_times(adj_mat, filtration_vals)
 
 # # %%
+
+# %%
