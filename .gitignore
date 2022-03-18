@@ -78,3 +78,5 @@ giotto-deep/
 runs/
 examples/tmp_data.pt
 examples/tmp_labels.pt
+events.*
+state_dicts/*
