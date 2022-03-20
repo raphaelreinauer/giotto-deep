@@ -74,6 +74,9 @@ def compute_death_times(adj_mat, filtration_vals):
     Returns:
         np.array: array of traversed nodes.
     """
+    assert min(filtration_vals) >= 0.0, "Algorithm assumes all filtration values to be positive."
+    assert min(filtration_vals) == filtration_vals[0], "Algorithm assumes that the first node has minimal filtration value."
+    
     # matrix containing all filtration values of the starting points that went through a
     # given node
     visited_nodes = get_visited_nodes(adj_mat, filtration_vals + 1) * filtration_vals.reshape(-1, 1)
@@ -112,15 +115,32 @@ def compute_death_times(adj_mat, filtration_vals):
 
 
 # # %%
-# graph_size = 5
-# adj_mat = np.zeros((graph_size, graph_size))
-# adj_mat[0, 2] = adj_mat[1, 2] = adj_mat[2, 4] = adj_mat[3, 4] = 1
-# adj_mat += adj_mat.T
-# filtration_vals = np.array(list(range(1, graph_size + 1)))
-# max_filtration = filtration_vals.max()
-# graph = nx.from_numpy_matrix(adj_mat)
-# nx.draw(graph, with_labels=True)
-# assert np.count_nonzero(get_local_minima(adj_mat, filtration_vals)) == graph_size - 2
+graph_size = 6
+adj_mat = np.zeros((graph_size, graph_size))
+adj_mat[0, 2] = adj_mat[1, 2] = adj_mat[2, 5] = adj_mat[3, 5] = adj_mat[4, 5] = 1
+adj_mat += adj_mat.T
+filtration_vals = np.array(list(range(1, graph_size + 1)))
+max_filtration = filtration_vals.max()
+graph = nx.from_numpy_matrix(adj_mat)
+nx.draw(graph, with_labels=True)
+assert np.count_nonzero(get_local_minima(adj_mat, filtration_vals)) == graph_size - 2
+
+# %%================================================================
+visited_nodes = get_visited_nodes(adj_mat, filtration_vals + 1) #* filtration_vals.reshape(-1, 1)
+
+# minimal filtration value of the starting points that went through a
+# given node
+visited_nodes[visited_nodes == 0] = np.inf
+min_vals = visited_nodes.argmax(axis=0)
+
+# 
+visited_nodes[visited_nodes == min_vals] = np.inf
+
+
+death_times = visited_nodes.argmin(axis=1)
+bars = filtration_vals < filtration_vals[death_times]
+print(filtration_vals[bars])
+print(death_times[bars])
 
 
 # # %%
@@ -131,3 +151,5 @@ def compute_death_times(adj_mat, filtration_vals):
 # %timeit x = compute_death_times(adj_mat, filtration_vals)
 
 # # %%
+
+# %%
