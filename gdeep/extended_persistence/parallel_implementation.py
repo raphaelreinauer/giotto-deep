@@ -7,7 +7,6 @@ import numpy as np
 
 from time import time
 from os.path import join
-from copy import deepcopy
 
 from gdeep.extended_persistence import HeatKernelSignature
 
@@ -142,6 +141,15 @@ bars = filtration_vals < filtration_vals[death_times]
 print(filtration_vals[bars])
 print(death_times[bars])
 
+# %%
+visited_nodes = get_visited_nodes(adj_mat, filtration_vals + 1) * filtration_vals.reshape(-1, 1)
+
+# minimal filtration value of the starting points that went through a
+# given node
+min_vals = ((visited_nodes == 0) * np.inf + visited_nodes).min(axis=0)
+
+# 
+death_matrix = visited_nodes * ((visited_nodes != 0) & (visited_nodes > min_vals))
 
 # # %%
 # from gdeep.extended_persistence.gudhi_implementation import graph_extended_persistence_gudhi

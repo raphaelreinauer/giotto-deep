@@ -79,3 +79,6 @@ runs/
 
 *.tfevents.*
 state_dicts/*
+examples/tmp_data.pt
+examples/tmp_labels.pt
+events.*
