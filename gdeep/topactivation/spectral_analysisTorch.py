@@ -155,8 +155,13 @@ class LaplacianOperator(LinearOperator):
             If ``"uppest"``, it will take the uppermost ``neig``.
 
             """
-         #By default we exclude 0 for better numerical 
-        return symeig(self,method='davidson',neig=self.shape[0]-1,mode ="uppest",**kwargs)
+         #By default we exclude 0 for better numerical stability at first 
+        u,v = symeig(self,method='davidson',neig=self.shape[0]-1,mode ="uppest",**kwargs)
+        # Adding 0 back
+        device = u.device
+        zero = torch.zeros(1).to(device)
+        ones = torch.ones((v.shape[0],1)).to(device)
+        return torch.cat([zero,u]), torch.cat([ones,v],dim=1)
         
         
         
