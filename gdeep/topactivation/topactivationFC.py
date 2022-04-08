@@ -47,8 +47,27 @@ class TopactivationFC:
             L = self.get_activation_graph(x, index_batch=i)
             L.extend_filtration()
             pers = L.extended_persistence()
-            diagrams.append(pers[3])
+            diagrams.append(pers)
         return diagrams
+
+    def get_extended_persistence_randomly_perturbed(self, data, target, epsilon):
+        diagrams = []
+        labels = []
+        data_perturbed = self.fgsm_attack(data, target, epsilon)
+        for i in range(len(data)):
+            if torch.bernoulli(torch.tensor(0.5)) == 1. :
+                L = self.get_activation_graph(data_perturbed, index_batch=i)
+                L.extend_filtration()
+                pers = L.extended_persistence()
+                diagrams.append(pers)
+                labels.append(1.)
+            else:
+                L = self.get_activation_graph(data, index_batch=i)
+                L.extend_filtration()
+                pers = L.extended_persistence()
+                diagrams.append(pers)
+                labels.append(0.)
+        return diagrams, labels
 
 
 
@@ -56,7 +75,7 @@ class TopactivationFC:
         diagrams = []
         for i in range(n_epochs):
             diagrams.append(self.get_extended_persistence(x))
-            self.pipe.train(optimizer, every_n_epochs, lr = lr)
+            self.pipe.train(optimizer, every_n_epochs)
         self.diagrams_training = diagrams
         return diagrams
 
