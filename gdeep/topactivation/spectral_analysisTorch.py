@@ -161,7 +161,7 @@ class LaplacianOperator(LinearOperator):
         device = u.device
         zero = torch.zeros(1).to(device)
         ones = torch.ones((v.shape[0],1)).to(device)
-        return torch.cat([zero,u]), torch.cat([ones,v],dim=1)
+        return torch.cat([zero,u]), torch.cat([ones/ones.norm(),v],dim=1)
         
         
         
