@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Tuple, Optional
 
 import numpy as np
 from sklearn.model_selection import train_test_split
@@ -49,10 +49,12 @@ def create_dataloaders(dataset_name: str,
             dataset,
             train_idx,
             normalize_features=normalize_persistence_diagrams,
-            num_points_to_keep=num_points_to_keep
             )
+    dataset = TransformableDataset(dataset, transform)
     
-    dataloader.set_stateful_transform(transform)
+    min_max_transform: Transform = MinMaxScaler()
+    dataset = TransformableDataset(dataset, min_max_transform)
+    
 
     # Create the dataloaders
     train_loader = torch.utils.data.DataLoader(
@@ -73,6 +75,4 @@ def create_dataloaders(dataset_name: str,
 
     return train_loader, test_loader
 
-
-# Tests for the dataloaders
 

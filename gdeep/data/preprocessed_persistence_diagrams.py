@@ -2,15 +2,15 @@ from typing import NewType, List, Tuple, Callable, Union, Optional
 
 import numpy as np
 import torch
-from torch.utils.data import Dataset
+
+from gdeep.data import PersistenceDiagramDataset
 
 Tensor = torch.Tensor
 Array = np.ndarray
 
-def _create_preprocessing_transform(dataset: Dataset,
+def _create_preprocessing_transform(dataset: PersistenceDiagramDataset,
                                    test_indices: Optional[Array] = None,
                                    normalize_features: bool = True,
-                                   num_points_to_keep: Optional[int] = None,
                                    ) -> Callable[[Tensor], Tensor]:
     
     """

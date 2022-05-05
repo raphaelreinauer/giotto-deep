@@ -17,8 +17,8 @@ class PersistenceDiagramDataset(Dataset):
     def set_transform(self, 
                       transform: Union[Callable[[torch.Tensor],
                                                 torch.Tensor], None]):
-        if(self.transform is not None):
-            self.transform = transform
+        # if(self.transform is not None):
+        #     raise ValueError("The transform is already set.")
         self.transform = transform
     
     

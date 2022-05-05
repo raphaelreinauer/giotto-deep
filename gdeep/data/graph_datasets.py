@@ -11,7 +11,7 @@ from tqdm import tqdm
 from gdeep.extended_persistence.heat_kernel_signature import \
     graph_extended_persistence_hks
 from gdeep.utility.constants import DEFAULT_GRAPH_DIR
-from gdeep import PersistenceDiagramDataset
+from gdeep.data import PersistenceDiagramDataset
 
 
 class PersistenceDiagramFromGraphDataset(PersistenceDiagramDataset):
@@ -39,6 +39,7 @@ class PersistenceDiagramFromGraphDataset(PersistenceDiagramDataset):
         self.diffusion_parameter: float = diffusion_parameter
         self.num_homology_types: int = 4
         self.root: str = root
+        # TODO: Add diffusion parameter to metadata
         self.output_dir: str = os.path.join(root,
                                        dataset_name + "_extended_persistence")
         self.transform: Union[Callable[[torch.Tensor], torch.Tensor],
@@ -180,6 +181,10 @@ class PersistenceDiagramFromGraphDataset(PersistenceDiagramDataset):
         # Apply the transformation
         if self.transform is not None:
             persistence_diagram_tensor = self.transform(
+                persistence_diagram_tensor
+                )
+        if self.stateful_transform is not None:
+             persistence_diagram_tensor = self.stateful_transform(
                 persistence_diagram_tensor
                 )
         

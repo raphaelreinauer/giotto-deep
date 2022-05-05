@@ -7,8 +7,6 @@ import torch.nn as nn
 from gdeep.topology_layers.components import build_activation
 from gdeep.topology_layers.components import LayerNormStyle
 
-# Define Type Self
-Self = TypeVar("Self", bound="Feedforward")
  
 
 @dataclass
