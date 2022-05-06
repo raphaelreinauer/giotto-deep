@@ -12,7 +12,7 @@ class TopactivationFC:
         self.pipe = pipe
         self.arch = arch
         self.diagrams_training = []
-
+        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
     def get_activation_graph(self, x, index_batch = 1):
@@ -31,7 +31,7 @@ class TopactivationFC:
             current_node += self.arch[i]
         for edge in edge_list:
             activation_graph.insert(list(edge), 0.0)
-        activations_flatten = torch.empty(0)
+        activations_flatten = torch.empty(0).to(self.device)
         for layer in range(n_layer):
             activations_flatten = torch.cat((activations_flatten, activations[layer][index_batch]))
         for neuron in range(activations_flatten.size()[0]):
