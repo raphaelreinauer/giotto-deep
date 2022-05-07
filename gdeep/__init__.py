@@ -10,5 +10,5 @@ __all__ = [
     'search',
     'topology_layers',
     'utility',
-    'visualisation'
+    'visualisation',
     ] 

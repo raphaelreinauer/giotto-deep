@@ -1,65 +1,13 @@
-from dataclasses import dataclass
-from enum import Enum
 from typing import Union, TypeVar, List, Optional, Dict, Any
 
 import torch
 import torch.nn as nn
 from torch.nn import MultiheadAttention
 
-from gdeep.topology_layers.components import build_activation
-from gdeep.topology_layers.components import LayerNormStyle
-
-Tensor = torch.Tensor
-
-class AttentionType(Enum):
-    """
-    A class to define attention types.
-    """
-    SELF_ATTENTION = "self_attention"
-    SPARSE_ATTENTION = "sparse_attention"
-    
-
-@dataclass
-class MultiHeadAttentionConfig:
-    """
-    Configuration class to define a multi-head attention layer.
-    
-    Args:
-        dim_model: The dimension of the model.
-        num_heads: The number of heads.
-        activation: The activation function to use.
-        dropout: The dropout probability.
-        layer_norm: Whether to use layer normalization.
-    """
-    dim_model: int
-    num_heads: int
-    activation: str
-    dropout: float
-    layer_norm_style: LayerNormStyle
-    bias: bool
-    attention_type: AttentionType
-    
-    def __init__(
-        self,
-        dim_model: int,
-        num_heads: int,
-        activation: str = "gelu",
-        dropout: float = 0.1,
-        layer_norm_style: LayerNormStyle = LayerNormStyle.NONE,
-        bias: bool = True,
-        attention_type: AttentionType = AttentionType.SELF_ATTENTION,
-        ) -> None:
-        
-        self.dim_model = dim_model
-        self.num_heads = num_heads
-        self.activation = activation
-        self.dropout = dropout
-        self.layer_norm_style = layer_norm_style
-        self.bias = bias
-        self.attention_type = attention_type
+from gdeep.utils import FTensor, ITensor
         
         
-class MultiHeadAttentionSelfAttentionLayer(nn.Module):
+class MultiHeadAttention(nn.Module):
     """
     A multi-head attention layer.
     
@@ -96,7 +44,7 @@ class MultiHeadAttentionSelfAttentionLayer(nn.Module):
         
     def forward(
         self,
-        query: Tensor,
+        query: FTensor,
         key: Tensor,
         value: Tensor,
         mask: Optional[Tensor] = None,

@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-Tensor = torch.Tensor
+from gdeep.utility import FTensor, ITensor
 
 class FourierMixer(nn.Module):
     """
@@ -20,7 +20,8 @@ class FourierMixer(nn.Module):
         self.dropout = nn.Dropout(dropout, inplace=False)
         
     def forward(self,
-                x: Tensor) -> Tensor:
+                x: FTensor,
+                mask: ITensor) -> FTensor:
         """
         Forward pass of the Fourier Mixer layer.
         
@@ -29,15 +30,3 @@ class FourierMixer(nn.Module):
         """
         x = torch.fft.fft2(x).real
         return self.dropout(x)
-# %%    
-import torch
-# import softmax
-from torch.nn import functional as F
-
-x = torch.tensor([[1.0, 1.0], [1.0, 0.0]])
-
-# compute softmax
-x_softmax = F.softmax(x, dim=1)
-
-print(x_softmax)
-# %%
