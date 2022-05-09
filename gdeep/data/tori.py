@@ -90,7 +90,7 @@ class CreateToriDataset:
             tup = self._make_blobs(**kwargs)
             return GenericDataset(*tup, target_transform=torch.tensor)
         else:
-            tup = self._make_entangled_tori_dataset(**self.kwargs)
+            tup = self._make_entangled_tori_dataset(**kwargs)
             return GenericDataset(*tup, target_transform=torch.tensor)
 
     @staticmethod
@@ -241,8 +241,8 @@ class CreateToriDataset:
                                      axis=0)
         return torch.from_numpy(tori_point_cloud), tori_labels
 
-    def _make_entangled_tori_dataset(self, m: int = 2,
-                                     n_pts: int = 10) -> tuple:
+    def _make_entangled_tori_dataset(self, m: int = 3,
+                                     n_pts: int = 100) -> tuple:
         """Generates pandas Dataframe of m x m x m tori in 3D.
         The labels correspond to the different Tori.
 
