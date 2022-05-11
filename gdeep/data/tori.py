@@ -194,7 +194,7 @@ class CreateToriDataset:
         return torus_point_clouds, torus_labels
 
     def _make_two_tori_dataset(self, entangled: bool = True,
-                               n_pts: int = 10) -> tuple:
+                               n_pts: int = 50) -> tuple:
         """Generates pandas Dataframe of two tori in 3D. The labels correspond to
         the different Tori.
 
@@ -278,7 +278,7 @@ class CreateToriDataset:
         return torch.from_numpy(data), lab
 
     @staticmethod
-    def _make_blobs(m: int = 3, n_pts: int = 200) -> tuple:
+    def _make_blobs(m: int = 2, n_pts: int = 200) -> tuple:
         """Generates blobs in 3D.
         The labels correspond to the different blob.
 
