@@ -242,7 +242,7 @@ class CreateToriDataset:
         return torch.from_numpy(tori_point_cloud), tori_labels
 
     def _make_entangled_tori_dataset(self, m: int = 3,
-                                     n_pts: int = 100) -> tuple:
+                                     n_pts: int = 50) -> tuple:
         """Generates pandas Dataframe of m x m x m tori in 3D.
         The labels correspond to the different Tori.
 
