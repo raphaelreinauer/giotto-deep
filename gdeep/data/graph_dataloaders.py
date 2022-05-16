@@ -1,17 +1,19 @@
-from typing import Tuple, Optional
+from typing import List, Optional, Tuple, Any
 
 import numpy as np
-from sklearn.model_selection import train_test_split
 import torch
-
 from gdeep.data.graph_datasets import PersistenceDiagramFromGraphDataset
 from gdeep.data.preprocessed_persistence_diagrams import \
     _create_preprocessing_transform
+from sklearn.model_selection import train_test_split
+
+Tensor = torch.Tensor
+Array = np.ndarray[Any, Any]
 
 def create_dataloaders(dataset_name: str,
                        diffusion_parameter: float = 10.0,
                        batch_size: int = 32,
-                       test_size = 0.2,
+                       test_size: float = 0.2,
                        random_state: int = 42,
                        normalize_persistence_diagrams: bool = True,
                        num_points_to_keep: Optional[int] = None,
@@ -37,23 +39,27 @@ def create_dataloaders(dataset_name: str,
     )
 
     # Create train and test splits
+    train_idx: List[int]
+    test_idx: List[int]
     train_idx, test_idx = train_test_split(
-        np.arange(len(dataset)),
+        range(len(dataset)),
         test_size=test_size,
         random_state=random_state
     )
     
-    if normalize_persistence_diagrams or num_points_to_keep is not None:
-        # Create the transform to normalize the persistence diagrams
-        transform = _create_preprocessing_transform(
-            dataset,
-            train_idx,
-            normalize_features=normalize_persistence_diagrams,
-            )
-    dataset = TransformableDataset(dataset, transform)
+    #TODO: Check if we want to have stateful transforms. If so, they should be
+    # created here.
+    # if normalize_persistence_diagrams or num_points_to_keep is not None:
+    #     # Create the transform to normalize the persistence diagrams
+    #     transform = _create_preprocessing_transform(
+    #         dataset,
+    #         train_idx,
+    #         normalize_features=normalize_persistence_diagrams,
+    #         )
+    # dataset = TransformableDataset(dataset, transform)
     
-    min_max_transform: Transform = MinMaxScaler()
-    dataset = TransformableDataset(dataset, min_max_transform)
+    # min_max_transform: Transform = MinMaxScaler()
+    # dataset = TransformableDataset(dataset, min_max_transform)
     
 
     # Create the dataloaders

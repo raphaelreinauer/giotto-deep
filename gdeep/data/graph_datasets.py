@@ -1,5 +1,5 @@
 import os
-from typing import List, Tuple, Callable, Union
+from typing import List, Tuple, Callable, Union, Optional
 
 import numpy as np
 import pandas as pd
@@ -39,11 +39,11 @@ class PersistenceDiagramFromGraphDataset(PersistenceDiagramDataset):
         self.diffusion_parameter: float = diffusion_parameter
         self.num_homology_types: int = 4
         self.root: str = root
-        # TODO: Add diffusion parameter to metadata
         self.output_dir: str = os.path.join(root,
-                                       dataset_name + "_extended_persistence")
-        self.transform: Union[Callable[[torch.Tensor], torch.Tensor],
-                                  None] = transform
+                                       dataset_name + "_extended_persistence_" +
+                                       "diffusion_" + str(diffusion_parameter))
+        self.transform: Optional[Callable[[torch.Tensor], torch.Tensor]] \
+            = transform
         
         # Check if the dataset exists in the specified directory
         if not os.path.exists(self.output_dir):
@@ -109,18 +109,12 @@ class PersistenceDiagramFromGraphDataset(PersistenceDiagramDataset):
                 graph_extended_persistence_hks(adj_mat, 
                                                diffusion_parameter=
                                                self.diffusion_parameter)
-            # Sort the diagram by the persistence lifetime, i.e. the second
-            # column minus the first column
-            sorted_diagram = PersistenceDiagramFromGraphDataset.\
-                _sort_diagram_by_lifetime(
-                persistence_diagram_one_hot
-                )
             
             # Save the persistence diagram in a file
             np.save(
                 (os.path.join(self.output_dir, "diagrams",
                               f"graph_{graph_idx}_persistence_diagram.npy")),
-                sorted_diagram
+                persistence_diagram_one_hot
                 )
             
             # Save the label
@@ -132,12 +126,6 @@ class PersistenceDiagramFromGraphDataset(PersistenceDiagramDataset):
             index=False
             )
 
-    @staticmethod
-    def _sort_diagram_by_lifetime(diagram: np.ndarray) -> np.ndarray:
-        return diagram[
-                    (diagram[:, 1] -
-                        diagram[:, 0]).argsort()
-                ]
         
     def __len__(self) -> int:
         """

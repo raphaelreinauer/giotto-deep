@@ -11,6 +11,11 @@ from .preprocessing import PreprocessText, TextDataset, \
 from .parallel_orbit import generate_orbit_parallel, create_pd_orbits,\
     OrbitsGenerator, DataLoaderKwargs
 from .persistence_diagram_dataset import PersistenceDiagramDataset
+from .graph_datasets import PersistenceDiagramFromGraphDataset
+from .graph_dataloaders import \
+    create_dataloaders
+from .persistence_diagram_transforms import \
+    keep_k_most_persistent_points
 
 __all__ = [
     'Rotation',
@@ -32,4 +37,6 @@ __all__ = [
     'DatasetCloud',
     'DlBuilderFromDataCloud',
     'PersistenceDiagramDataset',
+    'create_dataloaders',
+    'keep_k_most_persistent_points',
     ]

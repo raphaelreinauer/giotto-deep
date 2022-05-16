@@ -52,19 +52,3 @@ def _create_preprocessing_transform(dataset: PersistenceDiagramDataset,
     
     return transform
     
-def keep_most_persistent_points(x: Tensor, k: int) -> Tensor:
-    """
-    Keep the k-most persistent points in the persistence diagrams.
-     
-    Args:
-        Tensor: The persistence diagrams.
-        k: The number of the most persistent points to keep.
-         
-    Returns:
-        The persistence diagrams with the k-most persistent points kept.
-    """
-    # Find the indices of the k-most persistent points
-    indices = torch.argsort(x[1] - x[0])[-k:]
-    
-    # Return the k-most persistent points
-    return x[indices]
