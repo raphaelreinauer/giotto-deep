@@ -133,7 +133,7 @@ class LaplacianOperator(LinearOperator):
         if self.normalize=='sum':
             return x - 0.5*(self.adjacency(x)*self.invD+self.adjacency(x*self.invD))
         if self.normalize=='root':
-            x - self.isqrtD*self.adjacency(self.isqrtD*x)
+            return x - self.isqrtD*self.adjacency(self.isqrtD*x)
         else:
             return self.D*x - self.adjacency(x)
 
@@ -310,7 +310,7 @@ class SequentialLaplacianOperator(LinearOperator):
         if self.normalize=='sum':
             return x - 0.5*(self.adjacency(x)*self.invD+self.adjacency(x*self.invD))
         if self.normalize=='root':
-            x - self.isqrtD*self.adjacency(self.isqrtD*x)
+            return x - self.isqrtD*self.adjacency(self.isqrtD*x)
         else:
             return self.D*x - self.adjacency(x)
 
