@@ -8,8 +8,8 @@ from typing import List, Tuple, Union
 
 import wget  # type: ignore
 
-
-from gdeep.utility.constants import DEFAULT_DOWNLOAD_DIR, DATASET_BUCKET_NAME
+from gdeep.utility import DEFAULT_DOWNLOAD_DIR, DATASET_BUCKET_NAME
+from gdeep.utility.utils import get_checksum
 
 class DatasetCloud():
     """DatasetCloud class to handle the download and upload

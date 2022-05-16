@@ -1,4 +1,3 @@
-# %%
 from gdeep.data import _DataCloud
 
 import google  # type: ignore
@@ -12,8 +11,8 @@ import pytest
 import random
 from shutil import rmtree
 
+from gdeep.utility import DATASET_BUCKET_NAME
 from gdeep.utility.utils import get_checksum
-from gdeep.utility.constants import DATASET_BUCKET_NAME
 
 
 
