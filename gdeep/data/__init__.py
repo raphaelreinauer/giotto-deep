@@ -1,34 +1,15 @@
-from .categorical_data import CategoricalDataCloud
-from .tori import Rotation, \
-    CreateToriDataset, GenericDataset
-from .dataset_cloud import DatasetCloud
-from ._data_cloud import _DataCloud
-from .torch_datasets import TorchDataLoader, \
-    DataLoaderFromImages, DataLoaderFromArray, DlBuilderFromDataCloud
-from .preprocessing import PreprocessText, TextDataset, \
-    PreprocessTextTranslation, TextDatasetTranslation, \
-    PreprocessTextQA
-from .parallel_orbit import OrbitsGenerator, DataLoaderKwargs
-from .graph_datasets import PersistenceDiagramFromGraphDataset
+
+from .transforming_dataset import TransformingDataset
+from .preprocessing_pipeline import PreprocessingPipeline
+from .dataset_factory import DatasetFactory, get_dataset  # type: ignore
+from .abstract_preprocessing import AbstractPreprocessing
+
+
 
 __all__ = [
-    'Rotation',
-    'CategoricalDataCloud',
-    'CreateToriDataset',
-    'GenericDataset',
-    'PreprocessText',
-    'TextDataset',
-    'PreprocessTextQA',
-    'TorchDataLoader',
-    'generate_orbit_parallel',
-    'create_pd_orbits',
-    'OrbitsGenerator',
-    'DataLoaderKwargs',
-    'DataLoaderFromImages',
-    'PreprocessTextTranslation',
-    'TextDatasetTranslation',
-    'DataLoaderFromArray',
-    'DatasetCloud',
-    'DlBuilderFromDataCloud',
-    'PersistenceDiagramFromGraphDataset',
+    'TransformingDataset',
+    'PreprocessingPipeline',
+    'DatasetFactory',
+    'get_dataset',
+    'AbstractPreprocessing'
     ]

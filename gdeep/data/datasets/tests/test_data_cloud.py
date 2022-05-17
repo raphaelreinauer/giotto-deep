@@ -1,4 +1,5 @@
-from gdeep.data import _DataCloud
+# %%
+from gdeep.data.datasets import _DataCloud
 
 import google  # type: ignore
 from google.cloud import storage  # type: ignore
@@ -13,6 +14,7 @@ from shutil import rmtree
 
 from gdeep.utility import DATASET_BUCKET_NAME
 from gdeep.utility.utils import get_checksum
+from gdeep.utility import DATASET_BUCKET_NAME
 
 
 

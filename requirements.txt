@@ -35,3 +35,4 @@ torch-scatter
 torch-sparse
 gudhi
 tqdm
+jsonpickle

@@ -35,7 +35,6 @@ def get_parameter_types(func: Callable) -> List[Any]:
     
     Args:
         func: The function to get the types of the parameters of.
-
     Returns:
         A list of the types of the parameters of the function.
     """
