@@ -336,11 +336,22 @@ def get_attention_layer(config: PersformerConfig) -> Module:
     return AttentionFactory().build(config)
 
 
+class AttentionBase(Module):
+    def __init__(self, config: PersformerConfig):
+        super().__init__()
+        self.config = config
+        
+    def forward(self,  # type: ignore
+                input: Tensor,
+                attention_mask: Optional[Tensor] = None
+                ) -> Tensor:
+        raise NotImplementedError
+
 class AttentionFactory():
     """
     Factory for creating attention modules.
     """
-    attention_modules: Dict[AttentionType, Callable[[PersformerConfig], Module]] = {}
+    attention_modules: Dict[AttentionType, Callable[[PersformerConfig], AttentionBase]] = {}
     
     def __init__(self):
             # Register the attention layers here:
@@ -352,27 +363,27 @@ class AttentionFactory():
     
     def register_attention__builder(self,
                            attention_type: AttentionType,
-                           attention_module_builder: Callable[[PersformerConfig], Module]) -> None:
+                           attention_module_builder: Callable[[PersformerConfig], AttentionBase]) -> None:
         """
         Register an attention module.
         """
         self.attention_modules[attention_type] = attention_module_builder
         
-    def build(self, config: PersformerConfig) -> Module:
+    def build(self, config: PersformerConfig) -> AttentionBase:
             """
             Create an attention module.
             """
             return self.attention_modules[config.attention_type](config)
         
+    
 
-class DotProductAttention(Module):
+class DotProductAttention(AttentionBase):
     """
     Dot product attention. See https://arxiv.org/abs/1706.03762.
     """
     def __init__(self,
                  config: PersformerConfig):
-        super().__init__()
-        self.config = config
+        super().__init__(config)
         
         self.dot_product_attention = \
             MultiheadAttention(embed_dim=config.hidden_size,
@@ -383,19 +394,23 @@ class DotProductAttention(Module):
     
     
     def forward(self,  # type: ignore
-                query: Tensor,
-                key: Tensor,
-                value: Tensor,
+                input: Tensor,
                 attention_mask: Optional[Tensor] = None
                 ):
         """
         Forward pass.
         """
-        attention_output, _ = self.dot_product_attention(query, key, value, attention_mask)
+        attention_output, _ = self.dot_product_attention(input, input, input, attention_mask)
         return self.dropout(attention_output)
 
-class InducedAttention(Module):
+class InducedAttention(AttentionBase):
     def __init__(self, config: PersformerConfig) -> None:
-        super().__init__()
-        pass
+        super().__init__(config)
+        raise NotImplementedError
+    
+    def forward(self,  # type: ignore
+                input: Tensor,
+                attention_mask: Optional[Tensor] = None
+                ):
+        raise NotImplementedError
     
