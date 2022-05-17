@@ -151,6 +151,7 @@ class Persformer(Module):
         return Sequential(
                             Linear(self.config.hidden_size, self.config.hidden_size),
                             get_activation_function(self.config.hidden_act),
+                            Dropout(self.config.classifier_dropout_prob),
                             Linear(self.config.hidden_size, self.config.output_size),
                         )
         
@@ -321,6 +322,10 @@ def get_feed_forward_layer(config: PersformerConfig) -> Module:
                                     "output",
                                     Linear(config.intermediate_size, config.hidden_size)
                                     )
+    feed_forward_layer.add_module(
+                                    "dropout",
+                                    Dropout(config.hidden_dropout_prob)
+                                )
     return feed_forward_layer
 
 
@@ -334,7 +339,7 @@ def get_attention_layer(config: PersformerConfig) -> Module:
     ################################################################################################
     # Register the attention layers here:
     attention_factory.register_attention__builder(AttentionType.DOT_PRODUCT,
-                                                lambda config: DotProductAttention(config))
+                                                  lambda config: DotProductAttention(config))
     ################################################################################################
     
     return attention_factory.build(config)
@@ -375,6 +380,7 @@ class DotProductAttention(Module):
                                num_heads=config.num_attention_heads,
                                dropout=config.attention_probs_dropout_prob,
                                batch_first=True)
+        self.dropout = Dropout(config.hidden_dropout_prob)
     
     
     def forward(self,  # type: ignore
@@ -386,6 +392,8 @@ class DotProductAttention(Module):
         """
         Forward pass.
         """
-        attention_output = self.dot_product_attention(query, key, value, attention_mask)
-        return attention_output
+        attention_output, _ = self.dot_product_attention(query, key, value, attention_mask)
+        return self.dropout(attention_output)
 
+class InducedAttention(Module):
+    pass
