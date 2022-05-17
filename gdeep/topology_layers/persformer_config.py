@@ -1,9 +1,9 @@
 from enum import Enum, auto
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, Optional
 from transformers.configuration_utils import PretrainedConfig
 import torch
 import torch.nn as nn
-from torch.nn import Module, MultiheadAttention, Linear, Sequential
+from torch.nn import Module, MultiheadAttention, Linear, Sequential, LayerNorm, Dropout, ModuleList
 
 # Type aliases
 Tensor = torch.Tensor
@@ -72,6 +72,7 @@ class PersformerConfig(PretrainedConfig):
     """
     
     input_size: int # input size of the model
+    output_size: int
     hidden_size: int
     num_attention_layers: int
     num_attention_heads: int
@@ -88,6 +89,7 @@ class PersformerConfig(PretrainedConfig):
     
     def __init__(self,
                  input_size: int = 4,
+                 ouptut_size: int = 2 + 4,
                  hidden_size: int = 32,
                  num_attention_layers: int = 2,
                  num_attention_heads: int = 4,
@@ -105,6 +107,7 @@ class PersformerConfig(PretrainedConfig):
                  ):
         super().__init__(**kwargs)  # type: ignore
         self.input_size = input_size
+        self.output_size = ouptut_size
         self.hidden_size = hidden_size
         self.num_attention_layers = num_attention_layers
         self.num_attention_heads = num_attention_heads
@@ -121,7 +124,7 @@ class Persformer(Module):
     
     config: PersformerConfig
     embedding_layer: Module
-    persformer_blocks: List[Module]
+    persformer_blocks: ModuleList
     classifier_layer: Module
     
     def __init__(self, config: PersformerConfig):
@@ -134,7 +137,8 @@ class Persformer(Module):
         Build the model.
         """
         self.embedding_layer = self._get_embedding_layer()
-        self.persformer_blocks = []
+        self.persformer_blocks = ModuleList([self._get_persformer_block() 
+                                             for _ in range(self.config.num_attention_layers)])
         self.classifier_layer = self._get_classifier_layer()
 
     def _get_embedding_layer(self) -> Module:
@@ -147,7 +151,7 @@ class Persformer(Module):
         return Sequential(
                             Linear(self.config.hidden_size, self.config.hidden_size),
                             get_activation_function(self.config.hidden_act),
-                            Linear(self.config.hidden_size, self.config.input_size),
+                            Linear(self.config.hidden_size, self.config.output_size),
                         )
         
     def _get_persformer_block(self) -> Module:
@@ -189,6 +193,7 @@ class PersformerBlock(Module):
     attention_layer: Module
     feed_forward_layer: Module
     dropout_layer: Module
+    layer_norms: Optional[ModuleList]
     
     def __init__(self, config: PersformerConfig):
         super().__init__()
@@ -201,6 +206,11 @@ class PersformerBlock(Module):
         """
         self.attention_layer = get_attention_layer(self.config)
         self.feed_forward_layer = get_feed_forward_layer(self.config)
+       
+        if self.config.layer_norm_style == LayerNormStyle.PRE_LAYER_NORMALIZATION or \
+            self.config.layer_norm_style == LayerNormStyle.POST_LAYER_NORMALIZATION:
+            self.layer_norms = ModuleList([LayerNorm(self.config.hidden_size, eps=self.config.layer_norm_eps) 
+                                           for _ in range(2)])
         
     def forward(self,  # type: ignore
                 input_batch: Tensor,
@@ -216,13 +226,76 @@ class PersformerBlock(Module):
         Returns:
             The logits of the model. Of shape (batch_size, sequence_length, 1)
         """
-        # TODO: Implement add layer norm
-        output = input_batch
+        if self.config.layer_norm_style == LayerNormStyle.NO_LAYER_NORMALIZATION:
+            return self._forward_no_layer_norm(input_batch, attention_mask)
+        elif self.config.layer_norm_style == LayerNormStyle.PRE_LAYER_NORMALIZATION:
+            return self._forward_pre_layer_norm(input_batch, attention_mask)
+        elif self.config.layer_norm_style == LayerNormStyle.POST_LAYER_NORMALIZATION:
+            return self._forward_post_layer_norm(input_batch, attention_mask)
+        else:
+            raise ValueError(f"Unknown layer norm style {self.config.layer_norm_style}")
         
-        output = self.attention_layer(output, output, output, attention_mask)
         
-        output = self.feed_forward_layer(output)
+    def _forward_no_layer_norm(self,
+                               input_batch: Tensor,
+                               attention_mask: Optional[Tensor] = None
+                               ) -> Tensor:
+        """
+        Forward pass of the model without layer normalization.
+        
+        Args:
+            input_batch: The input batch. Of shape (batch_size, sequence_length, 2 + num_homology_types)
+            attention_mask: The attention mask. Of shape (batch_size, sequence_length)
+        
+        Returns:
+            The logits of the model. Of shape (batch_size, sequence_length, 1)
+        """
+        output = self.attention_layer(input_batch, attention_mask) + input_batch
+        output = self.feed_forward_layer(output) + output
         return output
+        
+    def _forward_pre_layer_norm(self,
+                                input_batch: Tensor,
+                                attention_mask: Optional[Tensor] = None
+                                ) -> Tensor:
+        """
+        Forward pass of the model with pre-layer normalization.
+        
+        Args:
+            input_batch: The input batch. Of shape (batch_size, sequence_length, 2 + num_homology_types)
+            attention_mask: The attention mask. Of shape (batch_size, sequence_length)
+        
+        Returns:
+            The logits of the model. Of shape (batch_size, sequence_length, 1)
+        """
+        assert self.layer_norms is not None
+        normalized = self.layer_norms[0](input_batch)
+        output = self.attention_layer(normalized, attention_mask) + input_batch
+        normalized = self.layer_norms[1](output)
+        output = self.feed_forward_layer(normalized) + output
+        return output
+    
+    def _forward_post_layer_norm(self,
+                                 input_batch: Tensor,
+                                 attention_mask: Optional[Tensor] = None
+                                 ) -> Tensor:
+        """
+        Forward pass of the model with post-layer normalization.
+        
+        Args:
+            input_batch: The input batch. Of shape (batch_size, sequence_length, 2 + num_homology_types)
+            attention_mask: The attention mask. Of shape (batch_size, sequence_length)
+        
+        Returns:
+            The logits of the model. Of shape (batch_size, sequence_length, 1)
+        """
+        assert self.layer_norms is not None
+        output = self.attention_layer(input_batch, attention_mask) + input_batch
+        output = self.layer_norms[0](output)
+        output = self.feed_forward_layer(output) + output
+        output = self.layer_norms[1](output)
+        return output
+
 
 
 def get_feed_forward_layer(config: PersformerConfig) -> Module:
@@ -240,7 +313,7 @@ def get_feed_forward_layer(config: PersformerConfig) -> Module:
                                 )
     feed_forward_layer.add_module(
                                     "dropout",
-                                    nn.Dropout(config.hidden_dropout_prob)
+                                    Dropout(config.hidden_dropout_prob)
                                 )
     
     feed_forward_layer.add_module(
