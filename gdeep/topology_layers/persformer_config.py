@@ -335,13 +335,6 @@ def get_attention_layer(config: PersformerConfig) -> Module:
     """
     
     attention_factory = AttentionFactory()
-    
-    ################################################################################################
-    # Register the attention layers here:
-    attention_factory.register_attention__builder(AttentionType.DOT_PRODUCT,
-                                                  lambda config: DotProductAttention(config))
-    ################################################################################################
-    
     return attention_factory.build(config)
 
 
@@ -350,6 +343,14 @@ class AttentionFactory():
     Factory for creating attention modules.
     """
     attention_modules: Dict[AttentionType, Callable[[PersformerConfig], Module]] = {}
+    
+    def __init__(self):
+            # Register the attention layers here:
+            self.register_attention__builder(AttentionType.DOT_PRODUCT,
+                                             lambda config: DotProductAttention(config))
+            self.register_attention__builder(AttentionType.INDUCED_ATTENTION,
+                                                lambda config: InducedAttention(config))
+        
     
     def register_attention__builder(self,
                            attention_type: AttentionType,
@@ -396,4 +397,7 @@ class DotProductAttention(Module):
         return self.dropout(attention_output)
 
 class InducedAttention(Module):
-    pass
+    def __init__(self, config: PersformerConfig) -> None:
+        super().__init__()
+        pass
+    
