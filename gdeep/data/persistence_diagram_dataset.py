@@ -9,7 +9,7 @@ from torch.utils.data import Dataset
 Tensor = torch.Tensor
 
 @dataclass
-class PersistenceDiagramDataset(Dataset):
+class PersistenceDiagramDataset(Dataset[Tuple[Tensor, int]):
     transform: Optional[Callable[[torch.Tensor], torch.Tensor]] = None
     stateful_transform: Optional[Callable[[torch.Tensor], torch.Tensor]] = None
     
