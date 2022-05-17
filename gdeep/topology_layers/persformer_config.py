@@ -333,9 +333,7 @@ def get_attention_layer(config: PersformerConfig) -> Module:
     """
     Get the attention layer.
     """
-    
-    attention_factory = AttentionFactory()
-    return attention_factory.build(config)
+    return AttentionFactory().build(config)
 
 
 class AttentionFactory():
