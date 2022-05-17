@@ -217,7 +217,8 @@ class PersformerBlock(Module):
                 attention_mask: Optional[Tensor] = None
                 ) -> Tensor:
         """
-        Forward pass of the model.
+        Forward pass of the model. We implement different layer normalizations in the forward pass,
+        see the paper https://arxiv.org/pdf/2002.04745.pdf for details.
         
         Args:
             input_batch: The input batch. Of shape (batch_size, sequence_length, 2 + num_homology_types)
