@@ -223,29 +223,8 @@ class PersformerBlock(Module):
         
         output = self.feed_forward_layer(output)
         return output
-        
-def get_attention_layer(config: PersformerConfig) -> Module:
-    """
-    Get the attention layer.
-    """
-    attention_layer = Sequential()
-    
-    attention_factory = AttentionFactory()
-    
-    # Register the attention layers here:
-    attention_factory.register_attention__builder(AttentionType.DOT_PRODUCT,
-                                                lambda config: DotProductAttention(config))
-    
-    attention_layer.add_module(
-                                "self_attention",
-                                attention_factory.build(config)
-                            )
-    attention_layer.add_module(
-                                "dropout",
-                                nn.Dropout(config.attention_probs_dropout_prob)
-                            )
-    return attention_layer
-        
+
+
 def get_feed_forward_layer(config: PersformerConfig) -> Module:
     """
     Get the feed forward layer.
@@ -271,6 +250,22 @@ def get_feed_forward_layer(config: PersformerConfig) -> Module:
     return feed_forward_layer
 
 
+def get_attention_layer(config: PersformerConfig) -> Module:
+    """
+    Get the attention layer.
+    """
+    
+    attention_factory = AttentionFactory()
+    
+    ################################################################################################
+    # Register the attention layers here:
+    attention_factory.register_attention__builder(AttentionType.DOT_PRODUCT,
+                                                lambda config: DotProductAttention(config))
+    ################################################################################################
+    
+    return attention_factory.build(config)
+
+
 class AttentionFactory():
     """
     Factory for creating attention modules.
@@ -294,7 +289,7 @@ class AttentionFactory():
 
 class DotProductAttention(Module):
     """
-    Dot product attention.
+    Dot product attention. See https://arxiv.org/abs/1706.03762.
     """
     def __init__(self,
                  config: PersformerConfig):
