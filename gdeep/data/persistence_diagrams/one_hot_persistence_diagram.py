@@ -55,20 +55,25 @@ def get_one_hot_encoded_persistence_diagram_from_gtda(persistence_diagram: Array
         A one-hot encoded persistence diagram. If the persistence diagram has only one homology
         dimension, the third column will be filled with ones.
     """
-    assert persistence_diagram.ndim == 2 and persistence_diagram.shape[1] == 3, \
-        "The input should be a 2-dimensional array of shape (num_points, 3)."
+    assert persistence_diagram.ndim == 2 and persistence_diagram.shape[1] >=2, \
+        "The input should be a 2-dimensional array of shape (num_points, 3) or (num_points, 2)."
 
-    homology_types: Set[int] = set([int(i) for i in persistence_diagram[:, 2]])
-    type_to_one_hot_encoding: Dict[int, int] = {
-        i: j for j, i in enumerate(homology_types)
-    }
-    one_hot_encoding: Tensor = torch.zeros(persistence_diagram.shape[0],
-                                             len(homology_types))
-    # TODO: Fill the one-hot encoding in a vectorized manner.
-    for i, j in enumerate(persistence_diagram[:, 2]):
-        one_hot_encoding[i, type_to_one_hot_encoding[int(j)]] = 1
-    birth_death_diagram: Tensor = torch.tensor(persistence_diagram[:, :2])
-        
-    return OneHotEncodedPersistenceDiagram(torch.stack((birth_death_diagram,
-                                                         one_hot_encoding),
-                                                         dim=-1))
+    if persistence_diagram.shape[1] == 2:
+        return OneHotEncodedPersistenceDiagram(
+            torch.stack((torch.tensor(persistence_diagram),
+                         torch.ones(persistence_diagram.shape[0])), dim=1))
+    else:
+        homology_types: Set[int] = set([int(i) for i in persistence_diagram[:, 2]])
+        type_to_one_hot_encoding: Dict[int, int] = {
+            i: j for j, i in enumerate(homology_types)
+        }
+        one_hot_encoding: Tensor = torch.zeros(persistence_diagram.shape[0],
+                                                len(homology_types))
+        # TODO: Fill the one-hot encoding in a vectorized manner.
+        for i, j in enumerate(persistence_diagram[:, 2]):
+            one_hot_encoding[i, type_to_one_hot_encoding[int(j)]] = 1
+        birth_death_diagram: Tensor = torch.tensor(persistence_diagram[:, :2])
+            
+        return OneHotEncodedPersistenceDiagram(
+            torch.stack((birth_death_diagram,
+                         one_hot_encoding), dim=1))
