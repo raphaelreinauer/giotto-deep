@@ -26,7 +26,7 @@ with open(path_to_data + 'types.csv', 'r') as f:
         line = line.strip().split(',')
         map_to_types[line[0]] = 0 if line[1] == 'pyramidal' else 1
 
-# get rid of ':A' in keys of map_to_types
+# get rid of ':A', ':B', ':C' in keys of map_to_types
 map_to_types = {k.split(':')[0]: v for k, v in map_to_types.items()}
 
 
@@ -55,6 +55,7 @@ class NeuralDataset(Dataset):
     
 ds = NeuralDataset(path_to_data, map_to_types)
 
+
 def collate_fn(batch):
     data, label = zip(*batch)
     
@@ -68,6 +69,7 @@ def collate_fn(batch):
 
 # Create a dataloader
 dl = DataLoader(ds, batch_size=32, shuffle=True, collate_fn=collate_fn)
+
 # %%
 # Super simple model
 
@@ -146,7 +148,7 @@ class Persformer(nn.Module):
         self.enc = nn.Sequential(
             SAB(dim_input, dim_hidden, num_heads, num_inds),#, ln=ln),
             SAB(dim_hidden, dim_hidden, num_heads, num_inds),#, ln=ln),
-            SAB(dim_hidden, dim_hidden, num_heads, num_inds)#, ln=ln),
+            #SAB(dim_hidden, dim_hidden, num_heads, num_inds)#, ln=ln),
         )
         self.dec = nn.Sequential(
             nn.Dropout(dropout),
@@ -178,12 +180,12 @@ trainer.train(Adam, n_epochs=100, cross_validation=False, optimizers_param={"lr"
 sum = 0
 for (data, label) in dl:
     sum += label.sum()
-print('Dataset inbalacne:', sum.item() / len(ds))
+print('Dataset inbalance:', sum.item() / len(ds))
 # %%
 data, label = next(iter(dl))
 
 # %%
-i = 10
+i = 16
 plt.scatter(data[i, :, 0], data[i, :, 1])
 
 # set title
