@@ -3,10 +3,10 @@ from torch.optim import SGD
 from sklearn.model_selection import StratifiedKFold
 import numpy as np
 
-from gdeep.pipeline import Pipeline
+from gdeep.trainer import Trainer
 from gdeep.models import FFNet
 from gdeep.search import GiottoSummaryWriter
-from gdeep.data.datasets import FromArray, BuildDataLoaders, \
+from gdeep.data.datasets import FromArray, DataLoaderBuilder, \
     get_dataset
 from gdeep.search import clean_up_files
 
@@ -27,14 +27,14 @@ def test_pipe_1():
     # dataloaders
     X = np.array(np.random.rand(100, 3), dtype=np.float32)
     y = np.array(np.random.randint(2, size=100*2).reshape(-1, 2), dtype=np.int64)
-    dl_tr, *_ = BuildDataLoaders((FromArray(X, y),)).build_dataloaders(batch_size=23)
+    dl_tr, *_ = DataLoaderBuilder((FromArray(X, y),)).build(({"batch_size" : 23},))
 
     # loss function
     loss_fn = nn.CrossEntropyLoss()
     # tb writer
     writer = GiottoSummaryWriter()
     # pipeline
-    pipe = Pipeline(model, [dl_tr, None],
+    pipe = Trainer(model, [dl_tr, None],
                     loss_fn, writer)#,StratifiedKFold(5, shuffle=True))
     # then one needs to train the model using the pipeline!
     pipe.train(SGD, 2, True, {"lr": 0.001}, n_accumulated_grads=2)

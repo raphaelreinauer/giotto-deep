@@ -6,11 +6,14 @@ from torch.utils.data import Dataset
 from sklearn.datasets import make_blobs
 
 Tensor = torch.Tensor
+Array = np.ndarray
 
 class Rotation():
     """Class for rotations
     """
-    def __init__(self, axis_0:int, axis_1:int, angle:float) -> None:
+    def __init__(self, axis_0: int,
+                 axis_1: int,
+                 angle: float) -> None:
         self._axis_0 = axis_0
         self._axis_1 = axis_1
         self._angle = angle
@@ -21,7 +24,7 @@ class Rotation():
     def return_angle(self) -> float:
         return self._angle
 
-    def rotation_matrix(self) -> np.ndarray:
+    def rotation_matrix(self) -> Array:
         rotation_matrix = np.identity(3)
         rotation_matrix[self._axis_0, self._axis_0]\
             = math.cos(self._angle)
@@ -42,7 +45,7 @@ class ToriDataset(Dataset[Tuple[Tensor, Tensor]]):
         name:
             name of the torus dataset to generate
     """
-    def __init__(self, name:str, **kwargs) -> None:
+    def __init__(self, name: str, **kwargs) -> None:
         self.name = name
         if self.name == "DoubleTori":
             self.out_tuple = self._make_two_tori_dataset(**kwargs)
@@ -66,8 +69,8 @@ class ToriDataset(Dataset[Tuple[Tensor, Tensor]]):
                                 n_points: int,
                                 noise: float,
                                 rotation: Rotation,
-                                base_point: np.ndarray,
-                                radius: float = 1.) -> Tuple[np.ndarray, np.ndarray]:
+                                base_point: Array,
+                                radius: float=1.) -> Tuple[Array, Array]:
         """Generate point cloud of a single torus
 
         Args:
@@ -113,8 +116,8 @@ class ToriDataset(Dataset[Tuple[Tensor, Tensor]]):
 
     @staticmethod
     def _make_torus_point_cloud2(label: int, n_points: int, noise: float,
-                                rotation: Rotation, base_point: np.ndarray,
-                                radius1: float = 1., radius2: float = 1.) -> Tuple[np.ndarray, np.ndarray]:
+                                rotation: Rotation, base_point: Array,
+                                radius1: float = 1., radius2: float = 1.) -> Tuple[Array, Array]:
         """Generate point cloud of a single torus using
         2 radii for its definition
 
@@ -194,7 +197,7 @@ class ToriDataset(Dataset[Tuple[Tensor, Tensor]]):
                                         radius)
 
     def _make_two_tori_dataset(self, entangled: bool = True,
-                               n_pts: int = 10) -> Tuple[Tensor, np.ndarray]:
+                               n_pts: int = 10) -> Tuple[Tensor, Array]:
         """Generates pandas Dataframe of two tori in 3D. The labels correspond to
         the different Tori.
 
@@ -239,10 +242,10 @@ class ToriDataset(Dataset[Tuple[Tensor, Tensor]]):
         tori_labels = np.concatenate((torus_labels[0],
                                       torus_labels[1]),
                                      axis=0)
-        return torch.from_numpy(tori_point_cloud), tori_labels
+        return torch.from_numpy(tori_point_cloud).to(torch.float32), tori_labels
 
     def _make_entangled_tori_dataset(self, m: int = 2,
-                                     n_pts: int = 10) -> Tuple[Tensor, np.ndarray]:
+                                     n_pts: int = 10) -> Tuple[Tensor, Array]:
         """Generates pandas Dataframe of m x m x m tori in 3D.
         The labels correspond to the different Tori.
 
@@ -277,10 +280,10 @@ class ToriDataset(Dataset[Tuple[Tensor, Tensor]]):
             if t != [0, 0, 0]:
                 data = np.append(data, np.add(tori_entangled, t), axis=0)
                 lab = np.append(lab, labels)
-        return torch.from_numpy(data), lab
+        return torch.from_numpy(data).to(torch.float32), lab
 
     @staticmethod
-    def _make_blobs(m: int = 3, n_pts: int = 200) -> Tuple[Tensor, np.ndarray]:
+    def _make_blobs(m: int = 3, n_pts: int = 200) -> Tuple[Tensor, Array]:
         """Generates blobs in 3D.
         The labels correspond to the different blob.
 
@@ -296,4 +299,4 @@ class ToriDataset(Dataset[Tuple[Tensor, Tensor]]):
         """
         data, lab = make_blobs(n_samples=n_pts, centers=m,
                                n_features=3, random_state=42)
-        return torch.from_numpy(data), lab
+        return torch.from_numpy(data).to(torch.float32), lab
