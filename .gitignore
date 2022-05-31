@@ -20,6 +20,7 @@ examples/*.nbconvert.ipynb
 examples/runs/*
 examples/data/*
 examples/.*
+examples/*.json
 
 # Html files
 examples/*.html
@@ -87,3 +88,6 @@ state_dicts/*
 # Include pkl test data
 !gdeep/topology_layers/tests/data/diagrams.pkl
 !gdeep/topology_layers/tests/data/labels.pkl
+
+# pylance files
+*.pyi
