@@ -23,11 +23,10 @@ path_to_data = './data/Neuron_Dataset/'
 map_to_types = {}
 with open(path_to_data + 'types.csv', 'r') as f:
     for line in f:
-        line = line.strip().split(',')
+        # replace ':' with '_'
+        line = line.strip().replace(':', '_').split(', ')
         map_to_types[line[0]] = 0 if line[1] == 'pyramidal' else 1
 
-# get rid of ':A', ':B', ':C' in keys of map_to_types
-map_to_types = {k.split(':')[0]: v for k, v in map_to_types.items()}
 
 
 print(map_to_types)
@@ -49,7 +48,7 @@ class NeuralDataset(Dataset):
         data = np.load(self.path_to_data + file_name)
         
         # get label
-        label = self.map_to_type['_'.join(file_name.split('_')[:2])]
+        label = self.map_to_type[file_name.split('.')[0]]
         
         return data, label
     
@@ -148,23 +147,37 @@ class Persformer(nn.Module):
         self.enc = nn.Sequential(
             SAB(dim_input, dim_hidden, num_heads, num_inds),#, ln=ln),
             SAB(dim_hidden, dim_hidden, num_heads, num_inds),#, ln=ln),
-            #SAB(dim_hidden, dim_hidden, num_heads, num_inds)#, ln=ln),
+            SAB(dim_hidden, dim_hidden, num_heads, num_inds)#, ln=ln),
+        )
+        self.pool = nn.Sequential(
+            nn.Dropout(dropout),
+            PMA(dim_hidden, num_heads, num_outputs, ln=ln),   
         )
         self.dec = nn.Sequential(
             nn.Dropout(dropout),
-            PMA(dim_hidden, num_heads, num_outputs, ln=ln),
+            nn.ReLU(inplace=True),
+            nn.Linear(2 * dim_hidden, 2*dim_hidden),
             nn.Dropout(dropout),
             nn.ReLU(inplace=True),
-            nn.Linear(dim_hidden, dim_hidden),
+            nn.Linear(2*dim_hidden, dim_hidden),
+            nn.Dropout(dropout),
             nn.ReLU(inplace=True),
             nn.Linear(dim_hidden, dim_output),
         )
+        self.dim_hidden = dim_hidden
 
     def forward(self, input):
-        return self.dec(self.enc(input)).squeeze()
+        out = self.enc(input)
+        return self.dec(
+                torch.cat([
+                        #out.max(dim=1)[0],
+                        out.sum(dim=1),
+                        self.pool(out).reshape(-1, self.dim_hidden)
+                    ], dim=1)
+            ).squeeze()
 
 
-model = Persformer(dim_input=2, dim_output=2, dropout=0.0, ln=True)
+model = Persformer(dim_input=2, dim_output=2, dropout=0.1, ln=True)
 # %%
 model(next(iter(dl))[0])
 # %%
