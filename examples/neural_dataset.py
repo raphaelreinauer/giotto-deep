@@ -9,6 +9,7 @@ import torch.nn.functional as F
 import torch.utils.data as data
 from torch.utils.data import Dataset, DataLoader
 from torch.optim import SGD, Adam
+from gdeep.search.hpo import HyperParameterOptimization
 
 from gdeep.trainer import Trainer
 from gdeep.search import GiottoSummaryWriter
@@ -134,9 +135,9 @@ class PMA(nn.Module):
 class Persformer(nn.Module):
     def __init__(
         self,
-        dim_input=3,  # dimension of input data for each element in the set
+        dim_input=2,  # dimension of input data for each element in the set
         num_outputs=1,
-        dim_output=40,  # number of classes
+        dim_output=2,  # number of classes
         num_inds=32,  # number of induced points, see  Set Transformer paper
         dim_hidden=128,
         num_heads=4,
@@ -223,18 +224,40 @@ for (data, label) in dl:
     sum += label.sum()
 print('Dataset inbalance:', sum.item() / len(ds))
 # %%
-data, label = next(iter(dl))
+pipe = Trainer(
+    model, [dl, None], loss_fn, writer,
+)
+# initialise gridsearch
+search = HyperParameterOptimization(pipe, "accuracy", 2, best_not_last=True)
 
-# %%
-i = 16
-plt.scatter(data[i, :, 0], data[i, :, 1])
+# if you want to store pickle files of the models instead of the state_dicts
+search.store_pickle = False
 
-# set title
-plt.title('Label: {}'.format(label[i]))
+# dictionaries of hyperparameters
+optimizers_params = {"lr": [0.001, 0.01]}
+dataloaders_params = {"batch_size": [16, 32, 4],
+                      collate_fn: [collate_fn]}
+models_hyperparams = {
+                      "num_inds": [32, 128 , 16],
+                      "dim_hidden": [32, 128 , 16],
+                      "num_heads": [4, 16, 4],
+                      "ln": [False, True],
+                      "dropout": [0.001, 0.01],
+                      "use_sab":  [False, True],
+                      "num_encoder_layer": [2, 4, 1],
+                      "use_max_pool": [False, True],
+                      "use_attention_pool":  [False, True],
+                      "use_sum_pool":  [False, True],
+                      }
 
-plt.show()
-# %%
-max_size = 0
-for i in range(len(ds)):
-    max_size = max(max_size, ds[i][0].shape[0])
+# starting the HPO
+search.start(
+    Adam,
+    3,
+    False,
+    optimizers_params,
+    dataloaders_params,
+    models_hyperparams,
+)
+
 # %%

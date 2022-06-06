@@ -24,6 +24,7 @@ html2image
 optuna
 sphinx_rtd_theme
 giotto-ph
+tqdm
 Pillow
 h5py
 dotmap
@@ -37,3 +38,4 @@ torch-sparse
 gudhi
 tqdm
 jsonpickle
+typing_extensions; python_version == '3.7'
