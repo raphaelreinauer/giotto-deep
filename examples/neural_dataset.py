@@ -234,15 +234,15 @@ search = HyperParameterOptimization(trainer, "accuracy", 20, best_not_last=True)
 search.store_pickle = False
 
 # dictionaries of hyperparameters
-optimizers_params = {"lr": [0.001, 0.01]}
+optimizers_params = {"lr": [1e-5, 1e-2, None, True]}
 dataloaders_params = {"batch_size": [16, 32, 4],
-                      "collate_fn": [collate_fn,]}
+                      "collate_fn": [collate_fn]}
 models_hyperparams = {
                       "num_inds": [32, 128 , 16],
                       "dim_hidden": [32, 128 , 16],
                       "num_heads": [4, 16, 4],
                       "ln": [False, True],
-                      "dropout": [0.001, 0.01],
+                      "dropout": [1e-5, 2e-1, None, True],
                       "use_sab":  [False, True],
                       "num_encoder_layer": [2, 4, 1],
                       "use_max_pool": [False, True],
