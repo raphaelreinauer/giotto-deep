@@ -151,10 +151,10 @@ class Persformer(nn.Module):
     ):
         super().__init__()
         
-        num_pools = 0
         self.use_max_pool = use_max_pool
         self.use_attention_pool = use_attention_pool
         self.use_sum_pool = use_sum_pool
+        num_pools = 0
         if use_max_pool:
             num_pools += 1
         if use_attention_pool:
@@ -217,18 +217,18 @@ loss_fn = nn.CrossEntropyLoss()
 # initialise pipeline class
 trainer = Trainer(model, [dl, None], loss_fn, writer)
 # %%
-trainer.train(Adam, n_epochs=100, cross_validation=False, optimizers_param={"lr": 0.0001})
+#trainer.train(Adam, n_epochs=100, cross_validation=False, optimizers_param={"lr": 0.0001})
 # %%
 sum = 0
 for (data, label) in dl:
     sum += label.sum()
 print('Dataset inbalance:', sum.item() / len(ds))
 # %%
-pipe = Trainer(
+trainer = Trainer(
     model, [dl, None], loss_fn, writer,
 )
 # initialise gridsearch
-search = HyperParameterOptimization(pipe, "accuracy", 2, best_not_last=True)
+search = HyperParameterOptimization(trainer, "accuracy", 20, best_not_last=True)
 
 # if you want to store pickle files of the models instead of the state_dicts
 search.store_pickle = False
@@ -236,7 +236,7 @@ search.store_pickle = False
 # dictionaries of hyperparameters
 optimizers_params = {"lr": [0.001, 0.01]}
 dataloaders_params = {"batch_size": [16, 32, 4],
-                      collate_fn: [collate_fn]}
+                      "collate_fn": [collate_fn,]}
 models_hyperparams = {
                       "num_inds": [32, 128 , 16],
                       "dim_hidden": [32, 128 , 16],
@@ -252,8 +252,8 @@ models_hyperparams = {
 
 # starting the HPO
 search.start(
-    Adam,
-    3,
+    [Adam],
+    20,
     False,
     optimizers_params,
     dataloaders_params,
