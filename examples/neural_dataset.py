@@ -151,6 +151,9 @@ class Persformer(nn.Module):
         super().__init__()
         
         num_pools = 0
+        self.use_max_pool = use_max_pool
+        self.use_attention_pool = use_attention_pool
+        self.use_sum_pool = use_sum_pool
         if use_max_pool:
             num_pools += 1
         if use_attention_pool:
@@ -161,11 +164,13 @@ class Persformer(nn.Module):
         
         if use_sab:
             self.enc = nn.Sequential(
-                SAB(dim_input, dim_hidden, num_heads, num_inds, ln=ln) for _ in range(num_encoder_layer)
+                SAB(dim_input, dim_hidden, num_heads, num_inds, ln=ln),
+                *(SAB(dim_hidden, dim_hidden, num_heads, num_inds, ln=ln) for _ in range(num_encoder_layer - 1))
             )
         else:
             self.enc = nn.Sequential(
-                ISAB(dim_input, dim_hidden, num_heads, num_inds, ln=ln) for _ in range(num_encoder_layer)
+                ISAB(dim_input, dim_hidden, num_heads, num_inds, ln=ln),
+                *(ISAB(dim_hidden, dim_hidden, num_heads, num_inds, ln=ln) for _ in range(num_encoder_layer - 1))
             )
         self.pool = nn.Sequential(
             nn.Dropout(dropout),
@@ -187,16 +192,16 @@ class Persformer(nn.Module):
     def forward(self, input):
         out = self.enc(input)
         pool_list = []
-        if use_max_pool:
+        if self.use_max_pool:
             pool_list.append(out.max(1)[0])
-        if use_attention_pool:
+        if self.use_attention_pool:
             pool_list.append(out.sum(dim=1))
-        if use_sum_pool:
+        if self.use_sum_pool:
             pool_list.append(self.pool(out).reshape(-1, self.dim_hidden))
         return self.dec(
-                torch.cat([
+                torch.cat(
                         pool_list
-                    ], dim=1)
+                    , dim=1)
             ).squeeze()
 
 
