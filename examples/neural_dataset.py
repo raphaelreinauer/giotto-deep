@@ -142,13 +142,31 @@ class Persformer(nn.Module):
         num_heads=4,
         ln=False,  # use layer norm
         dropout=0.1,
+        use_sab = False,
+        num_encoder_layer=2,
+        use_max_pool = False,
+        use_attention_pool = True,
+        use_sum_pool = False,
     ):
         super().__init__()
-        self.enc = nn.Sequential(
-            SAB(dim_input, dim_hidden, num_heads, num_inds),#, ln=ln),
-            SAB(dim_hidden, dim_hidden, num_heads, num_inds),#, ln=ln),
-            SAB(dim_hidden, dim_hidden, num_heads, num_inds)#, ln=ln),
-        )
+        
+        num_pools = 0
+        if use_max_pool:
+            num_pools += 1
+        if use_attention_pool:
+            num_pools += 1
+        if use_sum_pool:
+            num_pools += 1
+        assert num_pools > 0, "At least one of the pooling methods must be used"
+        
+        if use_sab:
+            self.enc = nn.Sequential(
+                SAB(dim_input, dim_hidden, num_heads, num_inds, ln=ln) for _ in range(num_encoder_layer)
+            )
+        else:
+            self.enc = nn.Sequential(
+                ISAB(dim_input, dim_hidden, num_heads, num_inds, ln=ln) for _ in range(num_encoder_layer)
+            )
         self.pool = nn.Sequential(
             nn.Dropout(dropout),
             PMA(dim_hidden, num_heads, num_outputs, ln=ln),   
@@ -156,10 +174,10 @@ class Persformer(nn.Module):
         self.dec = nn.Sequential(
             nn.Dropout(dropout),
             nn.ReLU(inplace=True),
-            nn.Linear(2 * dim_hidden, 2*dim_hidden),
+            nn.Linear(num_pools * dim_hidden, num_pools*dim_hidden),
             nn.Dropout(dropout),
             nn.ReLU(inplace=True),
-            nn.Linear(2*dim_hidden, dim_hidden),
+            nn.Linear(num_pools * dim_hidden, dim_hidden),
             nn.Dropout(dropout),
             nn.ReLU(inplace=True),
             nn.Linear(dim_hidden, dim_output),
@@ -168,11 +186,16 @@ class Persformer(nn.Module):
 
     def forward(self, input):
         out = self.enc(input)
+        pool_list = []
+        if use_max_pool:
+            pool_list.append(out.max(1)[0])
+        if use_attention_pool:
+            pool_list.append(out.sum(dim=1))
+        if use_sum_pool:
+            pool_list.append(self.pool(out).reshape(-1, self.dim_hidden))
         return self.dec(
                 torch.cat([
-                        #out.max(dim=1)[0],
-                        out.sum(dim=1),
-                        self.pool(out).reshape(-1, self.dim_hidden)
+                        pool_list
                     ], dim=1)
             ).squeeze()
 
