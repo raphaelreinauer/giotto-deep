@@ -165,8 +165,8 @@ class Persformer(nn.Module):
         
         if use_sab:
             self.enc = nn.Sequential(
-                SAB(dim_input, dim_hidden, num_heads, num_inds, ln=ln),
-                *(SAB(dim_hidden, dim_hidden, num_heads, num_inds, ln=ln) for _ in range(num_encoder_layer - 1))
+                SAB(dim_input, dim_hidden, num_heads, ln=ln),
+                *(SAB(dim_hidden, dim_hidden, num_heads, ln=ln) for _ in range(num_encoder_layer - 1))
             )
         else:
             self.enc = nn.Sequential(
@@ -175,9 +175,10 @@ class Persformer(nn.Module):
             )
         self.pool = nn.Sequential(
             nn.Dropout(dropout),
-            PMA(dim_hidden, num_heads, num_outputs, ln=ln),   
+            PMA(dim_hidden, num_heads, num_outputs, ln=False),   
         )
         self.dec = nn.Sequential(
+            nn.LayerNorm(num_pools * dim_hidden),
             nn.Dropout(dropout),
             nn.ReLU(inplace=True),
             nn.Linear(num_pools * dim_hidden, num_pools*dim_hidden),
@@ -206,7 +207,7 @@ class Persformer(nn.Module):
             ).squeeze()
 
 
-model = Persformer(dim_input=2, dim_output=2, dropout=0.1, ln=True)
+model = Persformer(dim_input=2, dim_output=2, dropout=0.015401409615648032, ln=True, dim_hidden=80, num_encoder_layer=3, use_sab=True, use_max_pool=False, use_attention_pool=True, use_sum_pool=True)
 # %%
 model(next(iter(dl))[0])
 # %%
@@ -217,7 +218,7 @@ loss_fn = nn.CrossEntropyLoss()
 # initialise pipeline class
 trainer = Trainer(model, [dl, None], loss_fn, writer)
 # %%
-#trainer.train(Adam, n_epochs=100, cross_validation=False, optimizers_param={"lr": 0.0001})
+trainer.train(Adam, n_epochs=50, cross_validation=False, optimizers_param={"lr": 0.002261214647090712})
 # %%
 sum = 0
 for (data, label) in dl:
@@ -247,17 +248,52 @@ models_hyperparams = {
                       "num_encoder_layer": [2, 4, 1],
                       "use_max_pool": [False, True],
                       "use_attention_pool":  [False, True],
-                      "use_sum_pool":  [False, True],
+                      "use_sum_pool":  [True],
                       }
 
 # starting the HPO
 search.start(
     [Adam],
-    20,
+    50,
     False,
     optimizers_params,
     dataloaders_params,
     models_hyperparams,
 )
+
+# %%
+# Saliency maps
+x, y = next(iter(trainer.dataloaders[0]))
+
+delta = torch.zeros_like(x, requires_grad=True)
+
+pred = trainer.model(x + delta)
+
+log_prob = pred#F.log_softmax(pred, dim=1)
+
+log_prob = log_prob.gather(1, y.view(-1, 1))
+
+log_prob.sum().backward()
+
+saliency = delta.grad.abs().detach().numpy()
+# %%
+for i in range(len(saliency)):
+    # plot the saliency map for the first example, i.e. all points in x[0] that are not 0 with a 
+    # color corresponding to the saliency value
+    mask = x[i].sum(axis=-1) > 0.1
+    pts = x[i][mask]
+    c = saliency[i][mask].sum(axis=-1)
+    c = (c - c.min()) / (c.max() - c.min())
+    plt.figure(figsize=(10, 10))
+    plt.scatter(pts.numpy()[:, 0], pts.numpy()[:, 1], c=c, cmap='jet')
+    plt.colorbar()
+    # draw diagonal line
+    plt.plot([0, pts.numpy().max(axis=0)[0]], [0, pts.numpy().max(axis=0)[1]], 'k')
+    # same scale for x and y
+    plt.axis('equal')
+    plt.title('Saliency map for class {} and example {}'.format(y[i].item(), i))
+    # save the plot
+    plt.savefig('saliency_map_{}_{}.png'.format(y[i].item(), i))
+    plt.show()
 
 # %%
