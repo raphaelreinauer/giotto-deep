@@ -8,7 +8,7 @@ from tqdm import tqdm
 import scipy.sparse.linalg
 
 class SVR():
-    def __init__(self,weights):
+    def __init__(self,weights,method='svr'):
         """ weights : a sequence of matrices representing successive linear maps 
         """ 
 
@@ -18,7 +18,8 @@ class SVR():
         for w in weights:
             arch.append(w.shape[0])
         self.arch = arch 
-        
+        self.method = method 
+
         S = []
         V = []
         U = []
@@ -27,21 +28,63 @@ class SVR():
         for layer in tqdm(weights):
             if len(layer.shape)==2:
                 u,s,v= self.svd(layer)
+                
+                if convolutional[-1]:
+                    # we reshape the FC input to match the convolution output 
+                    iz,m = v.shape
+                    i = U[-1].shape[0]
+                    z = iz//i 
+                    v = v.reshape(i,z,1,m) 
+
                 convolutional.append(False)
+
             else: #convolutional layer
                 convolutional.append(True)
-                u,s,v= self.svd(layer.flatten(start_dim=1))
+                o,i,k,k = layer.shape 
+                # z = k,k
+                if self.method=='svr':
+                    #o,i,z -> o,iz 
+                    u,s,v= self.svd(layer.flatten(start_dim=1))
+                    m = len(s)
+                    v = v.reshape(i,k,k,m) # iz,m -> i,z,m
+                elif self.method=='cosvr':
+                    # o,i,z-> oz,i 
+                    w = layer.transpose(0,1) #i,o,z
+                    w = w.flatten(start_dim=1) #i,oz
+                    w = w.transpose(0,1) #oz,i 
+                    u,s,v = self.svd(w)
+                    m = len(s)
+                    #oz,m -> o,z,m
+                    u = u.reshape(o,k,k,m)
+
+                else:
+                    raise Exception("Method unknow : "+str(method)) 
+
             U.append(u.to('cpu'))
             S.append(s.to('cpu'))
             V.append(v.to('cpu'))
+
         self.S = S
-        self.U = U 
-        self.V = V 
+        self.U=U 
+        self.V=V 
+        
         self.adjacency = []
         self.convolutional = convolutional 
         for i in range(len(V)-1):
+            # V[i+1]    : i,n or i,z,n  , transpose : n,z,i 
+            # U[i]      : o,m or o,z,m 
+            # contraction over o-i    n,m or n,z,m  = n,k,k,m
+            # adjacency (V.T@U) : n,m  
+            a = torch.tensordot(V[i+1].transpose(0,-1),U[i],1)
+            if self.convolutional[i]:
+                dimsToReduce = list(range(1,len(a.shape)-1))
+                self.adjacency.append(torch.sqrt((a**2).sum(dim=dimsToReduce) ))
+            else: 
+                self.adjacency.append(torch.abs(a))
+
+            """
             if not convolutional[i]:
-                self.adjacency.append(V[i+1].T@U[i])
+                self.adjacency.append(torch.abs(V[i+1].T@U[i]))
             else: 
                 u,v = U[i],V[i+1]
                 if convolutional[i+1]:
@@ -53,7 +96,7 @@ class SVR():
                     filters = torch.einsum('cm,cxn->nmx',u,v) 
                 
                 self.adjacency.append(filters.norm(dim=2))
-
+            """
 
     def svd(self,A):
         if min(A.shape)>128:
@@ -61,6 +104,9 @@ class SVR():
             v = torch.tensor(vh.T)
             u = torch.tensor(u)
             s = torch.tensor(s)
+            order = torch.argsort(s,descending=True)
+            s =s[order]
+            u,v = u[:,order],v[:,order]
         else:
             u,s,vh = torch.linalg.svd(A,full_matrices=False)
             v = vh.T
@@ -75,7 +121,7 @@ class SVR():
         y_scale : lambda functions to rescale the plot in the y-dimension (default is identity)
         nodeColor : what color is used for vertices
         """ 
-        U,S,V,arch,adjacency = self.U,self.S,self.V,self.arch,self.adjacency
+        S,arch,adjacency = self.S,self.arch,self.adjacency
         
         df = pd.DataFrame({})
         fig = px.scatter(df)
@@ -83,8 +129,8 @@ class SVR():
 
         #Edges  
         for k in range(len(adjacency)):
-            E=torch.pow(adjacency[k],2)
-            Emin = (sigmaThreshold**2) *1/arch[k+1]  #sigmaThreshold*1/np.sqrt(arch[k+1]) # 3 sigma away from the random uniform baseline 
+            E=adjacency[k]
+            Emin = (sigmaThreshold) * 1/np.sqrt(arch[k+1])  #sigmaThreshold*1/np.sqrt(arch[k+1]) # 3 sigma away from the random uniform baseline 
             for i in range(E.shape[0]):
                 for j in range(E.shape[1]):
                     if E[i,j]>Emin:
