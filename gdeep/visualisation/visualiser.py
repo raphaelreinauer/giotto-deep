@@ -1,22 +1,31 @@
+from typing import List, Optional, Union
+import random
+from copy import copy
+
 import torch
-from ..models import ModelExtractor
 from torchvision.utils import make_grid
-from gtda.plotting import plot_diagram, plot_betti_surfaces
-from . import persistence_diagrams_of_activations, \
-    plotly2tensor, Compactification, png2tensor
 from sklearn.manifold import MDS
 from gtda.diagrams import BettiCurve
 from html2image import Html2Image
 from captum.attr import visualization
-from matplotlib.colors import LinearSegmentedColormap
 import numpy as np
 import matplotlib.pyplot as plt
 from captum.attr import LayerAttribution
+from gtda.plotting import plot_diagram, plot_betti_surfaces
 
-if torch.cuda.is_available():
-    DEVICE = torch.device("cuda")
-else:
-    DEVICE = torch.device("cpu")
+from gdeep.trainer import Trainer
+from gdeep.analysis.interpretability import Interpreter
+from gdeep.utility import DEVICE
+from ..models import ModelExtractor
+from . import (
+    persistence_diagrams_of_activations,
+    plotly2tensor,
+    Compactification,
+    png2tensor,
+)
+
+FONT_SIZE = 16
+Tensor = torch.Tensor
 
 
 class Visualiser:
@@ -25,26 +34,48 @@ class Visualiser:
     different kinds to tensors
 
     Args:
-        pipe (Pipeline):
-            the pipeline to get info from
-        writer (tensorboard SummaryWriter):
-            the tensorboard writer
+        pipe :
+            the Trainer instance to get info from
+
+    Examples::
+
+        from gdeep.visualisation import Visualiser
+        # you must have an initialised `trainer`
+        vs = Visualiser(trainer)
+        vs.plot_data_model()
+
     """
 
-    def __init__(self, pipe):
+    def __init__(self, pipe: Trainer) -> None:
         self.pipe = pipe
         self.persistence_diagrams = None
 
-    def plot_data_model(self):
+    def plot_interactive_model(self) -> None:
         """This function has no arguments: its purpose
-        is to store data to the tensorboard for
-        visualisation.
+        is to store the model to tensorboard for an
+        interactive visualisation.
         """
 
         dataiter = iter(self.pipe.dataloaders[0])
-        images, labels = dataiter.next()
-        # print(str(labels.item()))
-        self.pipe.writer.add_graph(self.pipe.model, images.to(DEVICE))
+        x, labels = next(dataiter)
+        new_x: List[Tensor] = []
+        if isinstance(x, tuple) or isinstance(x, list):
+            for i, xi in enumerate(x):
+                new_x.append(xi.to(DEVICE))
+            x = copy(new_x)
+        else:
+            x = x.to(DEVICE)
+        # add interactive model to tensorboard
+        self.pipe.writer.add_graph(self.pipe.model, x)  # type: ignore
+        self.pipe.writer.flush()  # type: ignore
+
+    def plot_3d_dataset(self) -> None:
+        """This function has no arguments: its purpose
+        is to store data to the tensorboard for
+        visualisation. Note that we are expecting the
+        dataset item to be of type Tuple[Tensor, Tensor]
+        """
+        dataiter = iter(self.pipe.dataloaders[0])
         features_list = []
         labels_list = []
         index = 0
@@ -62,87 +93,89 @@ class Visualiser:
         features = torch.cat(features_list).to(DEVICE)
         if len(features.shape) >= 3:
             if len(features.shape) == 3:
-                features = features.reshape(max_number, -1,
-                                            features.shape[1],
-                                            features.shape[2])
+                features = features.reshape(
+                    max_number, -1, features.shape[1], features.shape[2]
+                )
                 grid = make_grid(features)
             else:
                 grid = make_grid(features)
 
-            self.pipe.writer.add_image('dataset',
-                                       grid,
-                                       0)
+            self.pipe.writer.add_image("dataset", grid, 0)  # type: ignore
 
-            self.pipe.writer.add_embedding(features.view(max_number, -1),
-                                           metadata=labels_list,
-                                           label_img=features,
-                                           tag='dataset',
-                                           global_step=0)
+            self.pipe.writer.add_embedding(  # type: ignore
+                features.view(max_number, -1),
+                metadata=labels_list,
+                label_img=features,
+                tag="dataset",
+                global_step=0,
+            )
         else:
-            self.pipe.writer.add_embedding(features.view(max_number, -1),
-                                           metadata=labels_list,
-                                           tag='dataset',
-                                           global_step=0)
+            self.pipe.writer.add_embedding(  # type: ignore
+                features.view(max_number, -1),
+                metadata=labels_list,
+                tag="dataset",
+                global_step=0,
+            )
 
-        self.pipe.writer.flush()
+        self.pipe.writer.flush()  # type: ignore
 
-    def plot_activations(self, example=None):
+    def plot_activations(self, batch: Optional[List[Union[List[Tensor], Tensor]]] = None) -> None:
         """Plot PCA of the activations of all layers of the
-        `self.model`
+        `self.model`.
+
+        Args:
+            batch:
+                this should be an input batch for the model
         """
         me = ModelExtractor(self.pipe.model, self.pipe.loss_fn)
-        inputs = []
-        labels = []
-        for j, item in enumerate(self.pipe.dataloaders[0]):
-            labels.append(item[1][0])
-            inputs.append(item[0][0])
-            if j == 100:
-                break
-        inputs = torch.stack(inputs)
+        if batch is not None:
+            inputs, labels = batch
+        else:
+            inputs, labels = next(iter(self.pipe.dataloaders[0]))
 
-        if example is not None:
-            inputs = inputs.to(example.dtype)
         acts = me.get_activations(inputs)
         print("Sending the plots to tensorboard: ")
         for i, act in enumerate(acts):
-            print("Step " + str(i+1) + "/" + str(len(acts)), end='\r')
+            print("Step " + str(i + 1) + "/" + str(len(acts)), end="\r")
             length = act.shape[0]
-            self.pipe.writer.add_embedding(act.view(length, -1),
-                                           metadata=labels,
-                                           tag="activations_" + str(i),
-                                           global_step=0)
-            self.pipe.writer.flush()
+            self.pipe.writer.add_embedding(   # type: ignore
+                act.view(length, -1),
+                metadata=labels,
+                tag="activations_" + str(i),
+                global_step=0,
+            )
+            self.pipe.writer.flush()  # type: ignore
 
-    def plot_persistence_diagrams(self, example=None):
+    def plot_persistence_diagrams(self, batch=None):
         """Plot a persistence diagrams of the activations
         """
         me = ModelExtractor(self.pipe.model, self.pipe.loss_fn)
         if self.persistence_diagrams is None:
-            inputs = []
-            for j, item in enumerate(self.pipe.dataloaders[0]):
-                inputs.append(item[0][0])
-                if j == 100:
-                    break
-            inputs = torch.stack(inputs)
-            if example is not None:
-                inputs = inputs.to(example.dtype)
+            if batch is not None:
+                inputs, _ = batch
+            else:
+                inputs, _ = next(iter(self.pipe.dataloaders[0]))
+
             activ = me.get_activations(inputs)
-            self.persistence_diagrams = \
-                persistence_diagrams_of_activations(activ)
+            self.persistence_diagrams = persistence_diagrams_of_activations(activ)
         list_of_dgms = []
         for i, persistence_diagram in enumerate(self.persistence_diagrams):
             plot_persistence_diagram = plot_diagram(persistence_diagram)
-            imgT = plotly2tensor(plot_persistence_diagram)
-            list_of_dgms.append(imgT)
+            img_t = plotly2tensor(plot_persistence_diagram)
+            list_of_dgms.append(img_t)
         features = torch.stack(list_of_dgms)
         # grid = make_grid(features)
-        self.pipe.writer.add_images("persistence_diagrams_of_activations",
-                                    features, dataformats="NHWC")
+        self.pipe.writer.add_images(
+            "persistence_diagrams_of_activations", features, dataformats="NHWC"
+        )
         self.pipe.writer.flush()
 
-    def plot_decision_boundary(self, compact=False):
+    def plot_decision_boundary(self, compact: bool = False):
         """Plot the decision boundary as the intrinsic
-        hypersurface defined by self.loss_fn == 0.5
+        hypersurface defined by self.loss_fn == 0.5. Note that
+        we are expecting a model whose forward function
+        has only one tensor as input (and not multiple
+        arguments).
 
         Args:
             compact (bool):
@@ -151,73 +184,82 @@ class Visualiser:
         """
 
         me = ModelExtractor(self.pipe.model, self.pipe.loss_fn)
-        X = next(iter(self.pipe.dataloaders[0]))[0][0]
+        x = next(iter(self.pipe.dataloaders[0]))[0][0]
 
         if compact:
             # initlaisation of the compactification
-            cc = Compactification(precision=0.1,
-                                  n_samples=500,
-                                  epsilon=0.051,
-                                  n_features=X.shape[0],
-                                  n_epochs=100,
-                                  neural_net=self.pipe.model)
+            cc = Compactification(
+                neural_net=self.pipe.model,
+                precision=0.1,
+                n_samples=500,
+                epsilon=0.051,
+                n_features=x.shape[0],  # if x is not List[Tensor]
+                n_epochs=100,
+            )
 
             d_final, label_final = cc.create_final_distance_matrix()
-            embedding = MDS(n_components=3,
-                            dissimilarity="precomputed")
+            embedding = MDS(n_components=3, dissimilarity="precomputed")
             db = embedding.fit_transform(d_final)
-            self.pipe.writer.add_embedding(db,
-                                           tag="compactified_decision_boundary",
-                                           global_step=0)
-            self.pipe.writer.flush()
+            self.pipe.writer.add_embedding(  # type: ignore
+                db, tag="compactified_decision_boundary", global_step=0
+            )
+            self.pipe.writer.flush()  # type: ignore
             return db, d_final, label_final
         else:
-            db = me.get_decision_boundary(X)
-            self.pipe.writer.add_embedding(db,
-                                           tag="decision_boundary",
-                                           global_step=0)
-            self.pipe.writer.flush()
+            db = me.get_decision_boundary(x)
+            self.pipe.writer.add_embedding(db, tag="decision_boundary", global_step=0)  # type: ignore
+            self.pipe.writer.flush()  # type: ignore
             return db.cpu(), None, None
 
-    def betti_plot_layers(self, homology_dimension=(0, 1), example=None):
+    def betti_plot_layers(
+            self, homology_dimension: Optional[List[int]] = None, batch: Optional[Tensor] = None
+    ) -> None:
         """
         Args:
-            homology_dimension (int array, optional):
-                An array of
-                homology dimensions
+            homology_dimension :
+                A list of
+                homology dimensions, e.g. ``[0, 1, ...]``
+            batch :
+                the selected batch of data to
+                compute the activations on. By
+                defaults, this method takes the
+                first batch of elements
 
         Returns:
            (None):
                 a tuple of figures representing the Betti surfaces
-                of the data accross layers of the NN, with one figure
+                of the data across layers of the NN, with one figure
                 per dimension in homology_dimensions. Otherwise, a single
                 figure representing the Betti curve of the single sample
                 present.
         """
-
+        if homology_dimension is not None:
+            homology_dimension = [0, 1]
         if self.persistence_diagrams is None:
             me = ModelExtractor(self.pipe.model, self.pipe.loss_fn)
-            inputs = self.pipe.dataloaders[0].dataset.data[:100]
-            if example is not None:
-                inputs = inputs.to(example.dtype)
-            self.persistence_diagrams = \
-                persistence_diagrams_of_activations(me.get_activations(inputs))
-        BC = BettiCurve()
-        dgms = BC.fit_transform(self.persistence_diagrams)
+            if batch is not None:
+                inputs, _ = batch
+            else:
+                inputs = next(iter(self.pipe.dataloaders[0]))  # type: ignore
+            self.persistence_diagrams = persistence_diagrams_of_activations(
+                me.get_activations(inputs)
+            )
+        bc = BettiCurve()
+        dgms = bc.fit_transform(self.persistence_diagrams)
 
-        plots = plot_betti_surfaces(dgms,
-                                    samplings=BC.samplings_,
-                                    homology_dimensions=homology_dimension)
+        plots = plot_betti_surfaces(
+            dgms, samplings=bc.samplings_, homology_dimensions=homology_dimension
+        )
 
         for i in range(len(plots)):
             plots[i].show()
 
-    def plot_interpreter_text(self, interpreter):
+    def plot_interpreter_text(self, interpreter: Interpreter):
         """This method allows to plot the results of an
         Interpreter for text data.
 
         Args:
-            interpreter (Interpreter):
+            interpreter :
                 this is a ``gdeep.analysis.interpretability``
                 initilised ``Interpreter`` class
                 
@@ -228,127 +270,100 @@ class Visualiser:
         fig = visualization.visualize_text(viz)
         name = "out.png"
         hti = Html2Image()
-        hti.screenshot(
-            html_str=fig.data,
-            save_as=name
-        )
+        hti.screenshot(html_str=fig.data, save_as=name)
         img_ten = png2tensor(name)
-        self.pipe.writer.add_image(interpreter.method,
-                                   img_ten,
-                                   dataformats="HWC")
+        self.pipe.writer.add_image(interpreter.method, img_ten, dataformats="HWC")  # type: ignore
         return fig
 
-    def plot_interpreter_image(self, interpreter):
+    def plot_interpreter_image(self, interpreter: Interpreter):
         """This method allows to plot the results of an
         Interpreter for image data.
 
         Args:
-            interpreter (Interpreter):
+            interpreter:
                 this is a ``gdeep.analysis.interpretability``
                 initilised ``Interpreter`` class
                 
         Returns:
             matplotlib.figure
         """
-        default_cmap = LinearSegmentedColormap.from_list('custom blue',
-                                                         [(0, '#ffffff'),
-                                                          (0.25, '#000000'),
-                                                          (1, '#000000')],
-                                                         N=256)
+
         try:
-            attrib = np.transpose(interpreter.attrib.squeeze().detach().cpu().numpy(),
-                                  (1, 2, 0))
+            attrib = (
+                torch.permute(interpreter.attribution.squeeze().detach(), (1, 2, 0)).detach().cpu().numpy()
+            )
         except ValueError:
-            attrib = np.transpose(LayerAttribution.interpolate(interpreter.attrib.detach().cpu(),
-                                                               tuple(interpreter.image.squeeze().detach().cpu().shape[-2:])).squeeze(0),
-                                  (1, 2, 0))
-            attrib = torch.stack((attrib, attrib, attrib),axis=2).squeeze(-1).detach().cpu().numpy()
-        img = np.transpose(interpreter.image.squeeze().detach().cpu().numpy(),
-                           (1, 2, 0))
+            attrib = torch.permute(
+                LayerAttribution.interpolate(
+                    interpreter.attribution.detach().cpu(),
+                    tuple(interpreter.x.squeeze().detach().cpu().shape[-2:]),
+                ).squeeze(0),
+                (1, 2, 0),
+            )
+            attrib = (
+                torch.stack([attrib, attrib, attrib], dim=2).squeeze(-1).detach().cpu().numpy()
+            )
+        img = (
+            torch.permute(interpreter.x.squeeze().detach(), (1, 2, 0)).detach().cpu().numpy()
+        )
 
         fig, _ = visualization.visualize_image_attr_multiple(
             attrib,
             img,
             ["original_image", "heat_map", "blended_heat_map"],
             ["all", "all", "all"],
-            show_colorbar=True)
-        self.pipe.writer.add_figure(interpreter.method,
-                                    fig)
+            show_colorbar=True,
+        )
+        self.pipe.writer.add_figure(interpreter.method, fig)  # type: ignore
         return fig
 
-    def plot_interpreter_tabular(self, interpreter):
+    def plot_feature_importance(self, interpreter: Interpreter):
         """This method allows to plot the results of an
         Interpreter for tabular data.
 
         Args:
-            interpreter (Interpreter):
+            interpreter :
                 this is a ``gdeep.analysis.interpretability``
-                initilised ``Interpreter`` class
+                initialised ``Interpreter`` class
                 
         Returns:
             matplotlib.figure
         """
         # prepare attributions for visualization
-        X_test = interpreter.X
-        x_axis_data = np.arange(X_test.shape[1])
-        x_axis_data_labels = list(map(lambda idx: idx,
-                                      x_axis_data))
-
-        ig_attr_test_sum = interpreter.ig_attr_test.detach().cpu().numpy().sum(0)
-        ig_attr_test_norm_sum = ig_attr_test_sum / \
-            np.linalg.norm(ig_attr_test_sum, ord=1)
-
-        ig_nt_attr_test_sum = \
-            interpreter.ig_nt_attr_test.detach().cpu().numpy().sum(0)
-        ig_nt_attr_test_norm_sum = ig_nt_attr_test_sum / \
-            np.linalg.norm(ig_nt_attr_test_sum, ord=1)
-
-        dl_attr_test_sum = \
-            interpreter.dl_attr_test.detach().cpu().numpy().sum(0)
-        dl_attr_test_norm_sum = dl_attr_test_sum / \
-            np.linalg.norm(dl_attr_test_sum, ord=1)
-
-        # gs_attr_test_sum = \
-        #     interpreter.gs_attr_test.detach().cpu().numpy().sum(0)
-        # gs_attr_test_norm_sum = gs_attr_test_sum / \
-        #     np.linalg.norm(gs_attr_test_sum, ord=1)
-
-        fa_attr_test_sum = interpreter.fa_attr_test.detach().cpu().numpy().sum(0)
-        fa_attr_test_norm_sum = fa_attr_test_sum / \
-            np.linalg.norm(fa_attr_test_sum, ord=1)
-
-        # lin_weight = model.lin1.weight[0].detach().numpy()
-        # y_axis_lin_weight = lin_weight / np.linalg.norm(lin_weight, ord=1)
+        x_test = interpreter.x
+        x_axis_data = np.arange(x_test.shape[1])
+        x_axis_data_labels = list(map(lambda idx: idx, x_axis_data))
 
         width = 0.14
-        legends = ['Int Grads', 'Int Grads w/SmoothGrad', 'DeepLift',
-                   'Feature Ablation', 'Weights']
+        legends = interpreter.features_list
 
         fig = plt.figure(figsize=(20, 10))
 
         ax = plt.subplot()
-        ax.set_title('Comparing input feature importances across ' + \
-            'multiple algorithms and learned weights')
-        ax.set_ylabel('Attributions')
+        ax.set_title(
+            "Comparing input feature importance across "
+            + "multiple algorithms and learned weights"
+        )
+        ax.set_ylabel("Attributions")
 
-        FONT_SIZE = 16
-        plt.rc('font', size=FONT_SIZE)  # fontsize of the text sizes
-        plt.rc('axes', titlesize=FONT_SIZE)  # fontsize of the axes title
-        plt.rc('axes', labelsize=FONT_SIZE)  # fontsize of the x and y labels
-        plt.rc('legend', fontsize=FONT_SIZE - 4)  # fontsize of the legend
+        plt.rc("font", size=FONT_SIZE)  # fontsize of the text sizes
+        plt.rc("axes", titlesize=FONT_SIZE)  # fontsize of the axes title
+        plt.rc("axes", labelsize=FONT_SIZE)  # fontsize of the x and y labels
+        plt.rc("legend", fontsize=FONT_SIZE - 4)  # fontsize of the legend
+        for i in range(len(interpreter.attribution_list)):  # type: ignore
+            attribution_sum = interpreter.attribution_list[i].detach().cpu().numpy().sum(0)  # type: ignore
+            attribution_norm_sum = attribution_sum / np.linalg.norm(attribution_sum, ord=1)
+            r = lambda: random.randint(0, 255)  # noqa
+            color = ('#%02X%02X%02X' % (r(), r(), r()))
+            ax.bar(
+                x_axis_data,
+                attribution_norm_sum,
+                width,
+                align="center",
+                alpha=0.8,
+                color=color,
+            )
 
-        ax.bar(x_axis_data, ig_attr_test_norm_sum, width, align='center',
-               alpha=0.8, color='#eb5e7c')
-        ax.bar(x_axis_data + width, ig_nt_attr_test_norm_sum, width,
-               align='center', alpha=0.7, color='#A90000')
-        ax.bar(x_axis_data + 2 * width, dl_attr_test_norm_sum, width,
-               align='center', alpha=0.6, color='#34b8e0')
-        # ax.bar(x_axis_data + 3 * width, gs_attr_test_norm_sum,
-        # width, align='center',  alpha=0.8, color='#4260f5')
-        ax.bar(x_axis_data + 4 * width, fa_attr_test_norm_sum, width,
-               align='center', alpha=1.0, color='#49ba81')
-        # ax.bar(x_axis_data + 5 * width, y_axis_lin_weight, width,
-        # align='center', alpha=1.0, color='grey')
         ax.autoscale_view()
         plt.tight_layout()
 
@@ -356,5 +371,85 @@ class Visualiser:
         ax.set_xticklabels(x_axis_data_labels)
 
         plt.legend(legends, loc=3)
-        self.pipe.writer.add_figure("Feature Importance", fig)
+        self.pipe.writer.add_figure("Feature Importance", fig)  # type: ignore
         return plt
+
+    def plot_attribution(self, interpreter: Interpreter, **kwargs):
+        """this method generically plots the attribution of
+        the interpreter
+
+        Args:
+            interpreter :
+                this is a ``gdeep.analysis.interpretability``
+                initilised ``Interpreter`` class
+            kwargs:
+                keywords arguments for the plot (visualize_image_attr of
+                captum)
+
+        Returns:
+            matplotlib.figure, matplotlib.figure"""
+        t1 = Visualiser._adjust_tensors_to_plot(interpreter.x)
+        t2 = Visualiser._adjust_tensors_to_plot(interpreter.attribution)
+        fig1, _ = visualization.visualize_image_attr(t1, **kwargs)
+        fig2, _ = visualization.visualize_image_attr(t2, **kwargs)
+        self.pipe.writer.add_figure("Datum x", fig1)  # type: ignore
+        self.pipe.writer.add_figure("Generic attribution of x", fig2)  # type: ignore
+        return fig1, fig2
+
+    def plot_self_attention(self, attention_tensor: List[Tensor], tokens_x: Optional[List[str]] = None,
+                            tokens_y: Optional[List[str]] = None, **kwargs) -> None:
+        """This functions plots the self-attention layer of a transformer.
+
+        Args:
+            attention_tensor:
+                list of the self-attetion tensors (i.e. the tensors
+                corresponding to the activations, given an input
+            tokens_x:
+                The string tokens to be displayed along the
+                x axis of the plot
+            tokens_y:
+                The string tokens to be displayed along the
+                y axis of the plot
+            """
+        fig = plt.figure(**kwargs)
+
+        for idx, scores in enumerate(attention_tensor):
+            scores_np = Visualiser._adjust_tensors_to_plot(scores)
+            ax = fig.add_subplot(4, 3, idx + 1)
+            # append the attention weights
+            im = ax.imshow(scores_np, cmap='viridis')
+
+            fontdict = {'fontsize': 10}
+            if tokens_x:
+                ax.set_xticks(range(len(tokens_x)))
+                ax.set_xticklabels(tokens_x, fontdict=fontdict, rotation=90)
+            if tokens_y:
+                ax.set_yticks(range(len(tokens_y)))
+                ax.set_yticklabels(tokens_y, fontdict=fontdict)
+
+            ax.set_xlabel('Head {}'.format(idx + 1))
+
+            fig.colorbar(im, fraction=0.046, pad=0.04)
+        plt.show()
+        self.pipe.writer.add_figure("Self attention map", fig)  # type: ignore
+        return fig
+
+    @staticmethod
+    def _adjust_tensors_to_plot(tensor: Tensor) -> np.ndarray:
+        """make sure that tensors that will be plotted as images have the
+        correct dimensions"""
+        if len(tensor.shape) == 4:
+            tensor = tensor[0, :, :, :]
+        elif len(tensor.shape) > 4:
+            tensor = tensor[0, :, :, :, 0]
+        list_of_permutation = torch.argsort(torch.tensor(tensor.shape)).tolist()
+        list_of_permutation.reverse()
+        tensor = tensor.permute(*list_of_permutation)
+
+        if tensor.shape[-1] == 2:
+            temporary = torch.zeros((tensor.shape[0], tensor.shape[1], 3))
+            temporary[:, :, :2] = tensor
+            tensor = temporary
+        else:
+            tensor = tensor[:, :, :4]
+        return tensor.permute(1, 0, 2).cpu().detach().numpy()

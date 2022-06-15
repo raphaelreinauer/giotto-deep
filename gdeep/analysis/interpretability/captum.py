@@ -1,49 +1,59 @@
-from captum.attr import * # TokenReferenceBase, \
-    # visualization, FeatureAblation, \
-    # DeepLift, NoiseTunnel, IntegratedGradients, \
-    # LayerIntegratedGradients, Occlusion, \
-    # GuidedGradCam, Saliency, InputXGradient
-import torch
+from typing import Any, Tuple, Dict, Callable, List, Optional
+import inspect
 
-if torch.cuda.is_available():
-    DEVICE = torch.device("cuda")
-else:
-    DEVICE = torch.device("cpu")
+# from captum.attr import *
+from captum.attr import TokenReferenceBase, visualization
+import torch
+from torch import nn
+from .attribution_factory import get_attr
+
+from gdeep.utility import DEVICE
+
+Tensor = torch.Tensor
+
 
 class Interpreter:
     """Class to visualise the activation maps,
-    the attribution maps and salicy maps using
+    the attribution maps and saliency maps using
     different techniques.
 
     Args:
-        model (nn.Module):
+        model:
             the standard pytorch model
-        method (string):
+        method:
             the interpretability method. Find
             more info at https://captum.ai/tutorials/
 
     """
+    x: Tensor
+    attribution: Tensor
+    sentence: str
+    y: Tensor
+    layer: Optional[torch.nn.Module]
+    features_list: Optional[List]
+    attribution_list: Optional[List]
 
-    def __init__(self, model,
-                 method="IntegratedGradients"):
+    def __init__(self, model: nn.Module,
+                 method: str = "IntegratedGradients"):
         # self.model = model
         self.model = model.to(DEVICE)
         self.method = method
-        self.stored_visualisations = []
-        self.image = None
-        self.X = None
-        self.sentence = None
-        self.attrib = None
+        self.stored_visualisations: List = []
 
-    def interpret_image(self, X, y, layer = None, **kwargs):
-        """This method creates an image interpreter. This class
+    def interpret(self,
+                  x: Tensor,
+                  y: Optional[Any] = None,
+                  layer: Optional[torch.nn.Module] = None,
+                  **kwargs: Any) -> Tuple[Tensor, Tensor]:
+        """This method creates a datum interpreter. This class
         is based on captum.
 
         Args:
-            X (tensor):
-                the tensor corresponding to the input image.
-                It is expected to be of size ``(b, c, h, w)``
-            y (int or float or str)
+            x:
+                the tensor corresponding to the input datum.
+                In case the datum is an image for example,
+                it is expected to be of size ``(b, c, h, w)``
+            y:
                 the label we want to check the interpretability
                 of.
             layer (nn.Module, optional):
@@ -51,102 +61,99 @@ class Interpreter:
                 of self.model
 
         Returns
-            (torch.Tensor, torch.Tensor):
-                the input image and the attribution
+            torch.Tensor, torch.Tensor:
+                the input datum and the attribution
                 image respectively.
         """
-        self.X = X.to(DEVICE)
-        if self.method in ("GuidedGradCam",
-                           "LayerConductance",
-                           "LayerActivation",
-                           "LayerGradCam",
-                           "LayerDeepLift",
-                           "LayerFeatureAblation",
-                           "LayerIntegratedGradients",
-                           "LayerGradientShap",
-                           "LayerDeepLiftShap"):
-            occlusion = eval(self.method+"(self.model, layer)")
+        self.x = x.to(DEVICE)
+        self.layer = layer
+        if self.layer:
+            attr_class = get_attr(self.method, self.model, self.layer)
         else:
-            occlusion = eval(self.method+"(self.model)")
+            attr_class = get_attr(self.method, self.model)
         self.model.eval()
-        att = occlusion.attribute(self.X, target=y, **kwargs)
-        self.image = self.X
-        self.attrib = att
-        return self.X, att
+        if y:
+            self.attribution = attr_class.attribute(self.x, target=y, **kwargs)
+        else:
+            self.attribution = attr_class.attribute(self.x, **kwargs)
+        return self.x, self.attribution
 
-    def interpret_tabular(self, X_test, y, **kwargs):
-        """This method creates an image interpreter. This class
+    def feature_importance(self, x: Tensor, y: Tensor, **kwargs: Any) \
+            -> Tuple[Tensor, List[Any]]:
+        """This method creates a tabular data interpreter. This class
         is based on captum.
 
         Args:
-            X (tensor):
-                the tensor corresponding to the input image.
-                It is expected to be of size ``(b, c, h, w)``
-            y (int or float or str)
-                the label we want to check the interpretability
-                of.
+            x:
+                the datum
+            y:
+                the target label
+            kwargs:
+                kwargs for the attributions
 
-        Returns
-            (torch.Tensor, torch.Tensor):
-                the input image and the attribution
-                image respectively.
+        Returns:
+            (Tensor, Tensor):
+                returns x and its attribution
+
         """
-        self.X = X_test.to(DEVICE)  # needed for plotting functions
-        y = y.to(DEVICE)
+        self.x = x.to(DEVICE)  # needed for attribution functions
+        self.y = y.to(DEVICE)
         self.model.eval()
-        ig = IntegratedGradients(self.model)
-        ig_nt = NoiseTunnel(ig)
-        dl = DeepLift(self.model)
-        # gs = GradientShap(self.model)
-        fa = FeatureAblation(self.model)
-        self.ig_attr_test = ig.attribute(self.X,
-                                         n_steps=50,
-                                         target=y,
-                                         **kwargs)
-        self.ig_nt_attr_test = ig_nt.attribute(self.X,
-                                               target=y,
-                                               **kwargs)
-        self.dl_attr_test = dl.attribute(self.X,
-                                         target=y,
-                                         **kwargs)
-        # self.gs_attr_test = gs.attribute(X_test, X_train, **kwargs)
-        self.fa_attr_test = fa.attribute(self.X,
-                                         **kwargs)
+        attr_list = []
+        attribute_dict = {"inputs": self.x, "target": self.y,
+                          "sliding_window_shapes": (1, ),
+                          "n_steps": 50, **kwargs
+                          }
+        self.features_list = ["IntegratedGradients", "IntegratedGradients",
+                              "DeepLift", "FeatureAblation", "Occlusion"]
+        for method in self.features_list:
+            attribution_class = get_attr(method, self.model)
+            args_names = inspect.signature(attribution_class.attribute).parameters.keys()
+            kwargs_of_method = {k: v for k, v in attribute_dict.items() if k in args_names}
+            attr_list.append(attribution_class.attribute(**kwargs_of_method))
+        self.attribution_list = attr_list
+        return self.x, self.attribution_list
 
-    def interpret_text(self, sentence, label, vocab,
-                       tokenizer, layer,
-                       min_len=7):
-        """This method creates an image interpreter. This class
+    def interpret_text(self, sentence: str,
+                       label: Any,
+                       vocab: Dict[str, int],
+                       tokenizer: Callable[[str], List[str]],
+                       layer: Optional[torch.nn.Module] = None,
+                       min_len: int = 7,
+                       **kwargs) -> Tuple[str, Tensor]:
+        """This method creates a text interpreter. This class
         is based on captum.
 
         Args:
-            sentence (string):
+            sentence :
                 the input sentence
-            label (int or float or str)
+            label:
                 the label we want to check the interpretability
                 of.
-            vocab (vocabulary):
-                a ``gdeep.data.PreprocessText`` vocabulary. Can
-                be extracted via the ``vocabulary``attribute.
-            tokenizer (tokenizer):
-                a ``gdeep.data.PreprocessText`` tokenizer. Can
-                be extracted via the ``tokenizer``attribute.
-            layer (nn.Module):
-                torch module correspondign to the layer belonging to
+            vocab :
+                a ``gdeep.data.preprocessors`` vocabulary. Can
+                be extracted via the ``vocabulary`` attribute.
+            tokenizer :
+                a ``gdeep.data.preprocessors`` tokenizer. Can
+                be extracted via the ``tokenizer`` attribute.
+            layer :
+                torch module corresponding to the layer belonging to
                 ``self.model``.
+            min_len:
+                minimum length of the text. Shorter texts are padded
+            kwargs:
+                additional arguments for the attribution
 
-        Returns
-            (torch.Tensor, torch.Tensor):
-                the input image and the attribution
-                image respectively.
         """
         self.model.eval()
         self.sentence = sentence
-        lig = eval(self.method+"(" + ",".join(("self.model", #"self.model." +
-                   "layer")) + ")")
+        if layer:
+            attr_class = get_attr(self.method, self.model, layer)
+        else:
+            attr_class = get_attr(self.method, self.model)
         text = tokenizer(sentence)
         if len(text) < min_len:
-            text += ['.'] * (min_len - len(text))
+            text += [' '] * (min_len - len(text))
         indexed = [vocab[t] for t in text]
 
         self.model.zero_grad()
@@ -160,33 +167,36 @@ class Interpreter:
         # predict
         pred_temp = torch.softmax(self.model(input_indices), 1)
         pred = torch.max(pred_temp)
-        pred_ind = torch.argmax(pred_temp).item()
+        pred_ind: float = torch.argmax(pred_temp).item()
         # generate reference indices for each sample
-        PAD_IND = vocab['.']
-        token_reference = TokenReferenceBase(reference_token_idx=PAD_IND)
+        pad_index = 0
+        token_reference = TokenReferenceBase(reference_token_idx=pad_index)
         reference_indices = \
             token_reference.generate_reference(seq_length,
                                                DEVICE).unsqueeze(0)
         # compute attributions and approximation
         # delta using layer integrated gradients
-        attributions_ig, delta = lig.attribute(input_indices,
-                                               reference_indices,
-                                               target=label,
-                                               n_steps=500,
-                                               return_convergence_delta=True)
+        self.attribution, delta = attr_class.attribute(input_indices,
+                                                       reference_indices,
+                                                       target=label,
+                                                       **kwargs)
 
         print('pred: ', pred_ind, '(', '%.2f' % pred, ')',
               ', delta: ', abs(delta.item()))
 
-        self.add_attributions_to_visualizer(attributions_ig, text, pred,
+        self.add_attributions_to_visualizer(self.attribution, text, pred,
                                             pred_ind, label, delta.item(),
-                                            self.stored_visualisations,
-                                            vocab)
+                                            self.stored_visualisations)
+        return sentence, self.attribution
 
     @staticmethod
-    def add_attributions_to_visualizer(attributions, text, pred, pred_ind,
-                                       label, delta, vis_data_records,
-                                       vocab):
+    def add_attributions_to_visualizer(attributions,
+                                       text: List[str],
+                                       pred: Tensor,
+                                       pred_ind: float,
+                                       label: Any,
+                                       delta: Any,
+                                       vis_data_records: List) -> None:
         attributions = attributions.sum(dim=2).squeeze(0)
         attributions = attributions / torch.norm(attributions)
         attributions = attributions.cpu().detach().numpy()

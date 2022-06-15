@@ -1,7 +1,7 @@
+import os
 
 from PIL import Image
 import numpy as np
-import os
 from plotly.io import write_image
 import torch
 
@@ -22,8 +22,8 @@ def plotly2tensor(fig) -> torch.Tensor:
         write_image(fig, "deleteme.jpeg", format="jpeg", engine="orca")
     except ValueError:
         write_image(fig, "deleteme.jpeg", format="jpeg")
-    img = Image.open("deleteme.jpeg")
-    arr = np.asarray(img).copy()
+    with Image.open("deleteme.jpeg") as img:
+        arr = np.asarray(img).copy()
     os.remove("deleteme.jpeg")
     return torch.from_numpy(arr)
 

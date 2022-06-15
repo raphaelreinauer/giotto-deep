@@ -8,22 +8,24 @@ scikit-learn
 spacy
 scipy
 networkx
-torch==1.10.0
-torch-tb-profiler==0.3.1
-torchdiffeq==0.2.2
-torchensemble==0.1.7
-torchtext==0.11.0
-torchvision==0.11.1
+torch
+torch-tb-profiler
+torchdiffeq
+torchensemble
+torchtext
+torchvision
+torchdata
 transformers
 einops
 tensorboard
-captum==0.4.1
+captum
 psutil
 kaleido
 html2image
 optuna
 sphinx_rtd_theme
 giotto-ph
+tqdm
 Pillow
 h5py
 dotmap
@@ -32,3 +34,4 @@ google-cloud-storage
 wget
 ipython
 jsonpickle
+typing_extensions; python_version == '3.7'

@@ -1,17 +1,17 @@
 import os
 import torch
 
-# Define the root directory of the project which is parent of the parent of 
+# Define the root directory of the project which is parent of the parent of
 # the current directory
-ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__),
-                                        os.pardir, os.pardir))
+ROOT_DIR = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), os.pardir, os.pardir)
+)
 
 # Define the default data directory
-DEFAULT_DATA_DIR = os.path.join(ROOT_DIR, 'examples', 'data')
+DEFAULT_DATA_DIR = os.path.join(ROOT_DIR, "examples", "data")
 
 # Define the default dataset download directory
-DEFAULT_DOWNLOAD_DIR = os.path.join(ROOT_DIR, "examples", "data",
-                                    "DatasetCloud")
+DEFAULT_DOWNLOAD_DIR = os.path.join(ROOT_DIR, "examples", "data", "DatasetCloud")
 
 # Define the default dataset bucket on Google Cloud Storage where the datasets
 # are stored
@@ -22,5 +22,5 @@ DATASET_BUCKET_NAME = "adversarial_attack"
 # datasets from the PyG (PyTorch Geometric) library are stored
 DEFAULT_GRAPH_DIR = os.path.join(ROOT_DIR, "examples", "data", "GraphDatasets")
 
-# Define the default deevce: "cuda" is available, "cpu" otherwise
+# Define the default device: "cuda" is available, "cpu" otherwise
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
