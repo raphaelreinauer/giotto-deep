@@ -6,11 +6,17 @@ import numpy as np
 import os 
 from tqdm import tqdm 
 import scipy.sparse.linalg
+from scipy.stats import chi2,norm
+import matplotlib.pyplot as plt 
+
 
 class SVR():
-    def __init__(self,weights,method='svr'):
+    def __init__(self,weights,method='svr',max_modes=128):
         """ weights : a sequence of matrices representing successive linear maps 
         """ 
+
+        #Removing biases 
+        weights = [w for w in weights if len(w.shape)>1]
 
         #Building architecture from maps 
         arch = []
@@ -19,6 +25,7 @@ class SVR():
             arch.append(w.shape[0])
         self.arch = arch 
         self.method = method 
+        self.max_modes = max_modes 
 
         S = []
         V = []
@@ -29,7 +36,7 @@ class SVR():
             if len(layer.shape)==2:
                 u,s,v= self.svd(layer)
                 
-                if convolutional[-1]:
+                if len(convolutional)>0 and convolutional[-1]:
                     # we reshape the FC input to match the convolution output 
                     iz,m = v.shape
                     i = U[-1].shape[0]
@@ -37,7 +44,6 @@ class SVR():
                     v = v.reshape(i,z,1,m) 
 
                 convolutional.append(False)
-
             else: #convolutional layer
                 convolutional.append(True)
                 o,i,k,k = layer.shape 
@@ -65,8 +71,8 @@ class SVR():
             V.append(v.to('cpu'))
 
         self.S = S
-        self.U=U 
-        self.V=V 
+        self.U = U 
+        self.V = V 
         
         self.adjacency = []
         self.convolutional = convolutional 
@@ -78,29 +84,14 @@ class SVR():
             a = torch.tensordot(V[i+1].transpose(0,-1),U[i],1)
             if self.convolutional[i]:
                 dimsToReduce = list(range(1,len(a.shape)-1))
-                self.adjacency.append(torch.sqrt((a**2).sum(dim=dimsToReduce) ))
+                self.adjacency.append((a**2).sum(dim=dimsToReduce))
             else: 
-                self.adjacency.append(torch.abs(a))
+                self.adjacency.append(a**2)
 
-            """
-            if not convolutional[i]:
-                self.adjacency.append(torch.abs(V[i+1].T@U[i]))
-            else: 
-                u,v = U[i],V[i+1]
-                if convolutional[i+1]:
-                    ker_size = weights[i+1].shape[-1]
-                    v = v.T.reshape(v.shape[1],int(v.shape[0]/ker_size**2),ker_size**2)
-                    filters = torch.einsum('cm,ncx->nmx',u,v)
-                else: 
-                    v = v.reshape(u.shape[0],v.shape[0]//u.shape[0],v.shape[1])
-                    filters = torch.einsum('cm,cxn->nmx',u,v) 
-                
-                self.adjacency.append(filters.norm(dim=2))
-            """
 
     def svd(self,A):
-        if min(A.shape)>128:
-            u,s,vh = scipy.sparse.linalg.svds(A.cpu().numpy(),k=128)
+        if min(A.shape)>self.max_modes:
+            u,s,vh = scipy.sparse.linalg.svds(A.cpu().numpy(),k=self.max_modes)
             v = torch.tensor(vh.T)
             u = torch.tensor(u)
             s = torch.tensor(s)
@@ -114,11 +105,12 @@ class SVR():
         return u,s,v 
 
 
-    def _build_fig(self,sigmaThreshold,y_scale=lambda x :x,nodeColor='blue',plotValue=False):
+
+    def _build_fig(self,sigmaThreshold,max_edges,y_scale=lambda x :x,node_color = {'fc' : 'blue', 'conv':'red'},plotValue=False):
 
         """ 
         sigmaThreshold : confidence threshold under which edges are not shown 
-        y_scale : lambda functions to rescale the plot in the y-dimension (default is identity)
+        y_scale : custom lambda function to rescale the plot in the y-dimension (default is identity)
         nodeColor : what color is used for vertices
         """ 
         S,arch,adjacency = self.S,self.arch,self.adjacency
@@ -126,19 +118,47 @@ class SVR():
         df = pd.DataFrame({})
         fig = px.scatter(df)
 
+        layout = go.Layout(
+        title="Network SVR - Link minimum significance : "+str(sigmaThreshold)+ " sigma",
+        xaxis=dict(
+            title="Layer index"
+        ),
+        yaxis=dict(
+            title="Singular value"
+        ) ) 
+        fig=go.Figure(layout=layout) 
 
         #Edges  
-        for k in range(len(adjacency)):
+        for k in tqdm(range(len(adjacency))):
             E=adjacency[k]
-            Emin = (sigmaThreshold) * 1/np.sqrt(arch[k+1])  #sigmaThreshold*1/np.sqrt(arch[k+1]) # 3 sigma away from the random uniform baseline 
+
+            mean = 1/arch[k+1]
+            
+            if self.convolutional[k] and self.method =='svr': 
+                kernel_size = (self.V[k+1].shape[1]*self.V[k+1].shape[2])**0.5
+            elif self.convolutional[k] and self.method=='cosvr': 
+                kernel_size = (self.U[k].shape[1]*self.U[k].shape[2])**0.5
+            else: #Fully connected layer
+                kernel_size = 1 
+
+            std = np.sqrt(2)*mean/kernel_size 
+            z = int(np.round(kernel_size**2)) 
+            p = 1-norm.cdf(sigmaThreshold)
+
+            Emin1 = (chi2.ppf(1-p,z)/z)*mean #Probabilistic threshold 
+            Emin2 = E.flatten().sort(descending=True)[0][min(max_edges,np.prod(E.shape))-1] # Practical threshold against overload 
+            Emin = max(Emin1,Emin2)
+
+
+            
             for i in range(E.shape[0]):
                 for j in range(E.shape[1]):
-                    if E[i,j]>Emin:
+                    if E[i,j]>=Emin:
                         edge = pd.DataFrame({"x" : [k,k+1],"y": [y_scale(S[k][j]).item(),y_scale(S[k+1][i]).item()]})
                         #figEdge = go.scatter.Line(x=[k,k+1],y=[y_scale(S[k][j]),y_scale(S[k+1][i])],fillcolor='grey')
 
                         #fig.add_trace(figEdge)
-                        coeff = 1-(E[i,j]-Emin)/(E.max()-Emin) # A mieux faire 
+                        coeff = 1-(E[i,j]-Emin1)/(E.max()-Emin1) # A mieux faire 
                         color = coeff.item()*np.array([120,120,120])+np.array([105,105,105])
                         r,g,b=int(color[0]),int(color[1]),int(color[2])
                         color = "rgb"+str((r,g,b))
@@ -171,9 +191,10 @@ class SVR():
             base+=len(S[i])
             #fig.add_scatter(x=df["x"], y=df["y"])   
             if self.convolutional[i]:
-                color = 'red'
+                color = node_color['conv']
             else: 
-                color = nodeColor        
+                color = node_color['fc']    
+
             node_trace = go.Scatter(
                 x=df["x"],
                 y=df["y"],
@@ -188,14 +209,14 @@ class SVR():
 
         return fig 
 
-    def plot(self,sigmaThreshold=3,y_scale=lambda x :x,nodeColor='blue'):
-        fig = self._build_fig(sigmaThreshold,y_scale,nodeColor)
+    def plot(self,sigmaThreshold=3,y_scale=lambda x :x,nodeColor='blue',max_edges=100):
+        fig = self._build_fig(sigmaThreshold,max_edges,y_scale)
         fig.show()
     
-    def plot_save(self,path,sigmaThreshold=2,y_scale=lambda x :x,nodeColor='blue'):
+    def plot_save(self,path,sigmaThreshold=3,y_scale=lambda x :x,nodeColor='blue',max_edges=100):
         """ path : path used for saving the image (including filename) 
         """ 
-        fig =  self._build_fig(sigmaThreshold,y_scale,nodeColor)
+        fig =  self._build_fig(sigmaThreshold,max_edges,y_scale)
         fig.write_image(path+'.png')
         
 
@@ -222,6 +243,43 @@ class SVR():
 
         return x.sum().item()
                 
+    def filters(self,i):
+        """ This function returns the effective filters that connects modes from consecutive convolutional layer  
+            Input : 
+                - i : layer index 
+            Returns :
+                an array (n,m) where m is the number of mode in layer i and n the number of modes in layer i+1
+        """ 
+        return torch.tensordot(self.V[i+1].transpose(0,-1),self.U[i],1)
+
+    def plot_filters(self,f):
+        """ Input : f with shape nb of channels, K, K 
+                    in that case f will be reshaped to a square-like configuration 
+                    f with shape h,w,K,K 
+                    in that case a w,h array of filters will be plotted """
+                    
+        
+        K = f.shape[-1]
+        if len(f.shape)==3:
+            c = f.shape[0]
+            w = int(np.sqrt(c))
+            h = c//w
+        elif len(f.shape)==4:
+            h,w=f.shape[0],f.shape[1]
+        else:
+            raise Exception("Invalid input shape") 
+
+        res = torch.zeros((K+1)*w,(K+1)*h ) 
+        for i in range(w):
+            for j in range(h):
+                basei = (K+1)*i
+                basej = (K+1)*j
+                if len(f.shape)==3:
+                    res[basei:basei+K,basej:basej+K] = f[i+w*j,:,:]
+                else:
+                    res[basei:basei+K,basej:basej+K] = f[j,i,:,:]
+        plt.imshow(res)
+        plt.show() 
 
 
     def entropy(self):
