@@ -145,41 +145,42 @@ class SVR():
             z = int(np.round(kernel_size**2)) 
             p = 1-norm.cdf(sigmaThreshold)
 
-            Emin1 = (chi2.ppf(1-p,z)/z)*mean #Probabilistic threshold 
-            Emin2 = E.flatten().sort(descending=True)[0][min(max_edges,np.prod(E.shape))-1] # Practical threshold against overload 
-            Emin = max(Emin1,Emin2)
+            Emin = (chi2.ppf(1-p,z)/z)*mean #Probabilistic threshold 
+            F = E.reshape(E.shape[0]*E.shape[1]).argsort(descending=True)[:max_edges] # Practical threshold against overload 
+            F = torch.flip(F,dims=[0])
+            Fi = F.div(E.shape[1], rounding_mode="floor") 
+            Fj = F.remainder(E.shape[1])
 
+            for i,j in zip(Fi,Fj):
+                if E[i,j]<Emin:
+                    break
+                else:
+                    edge = pd.DataFrame({"x" : [k,k+1],"y": [y_scale(S[k][j]).item(),y_scale(S[k+1][i]).item()]})
+                    #figEdge = go.scatter.Line(x=[k,k+1],y=[y_scale(S[k][j]),y_scale(S[k+1][i])],fillcolor='grey')
 
-            
-            for i in range(E.shape[0]):
-                for j in range(E.shape[1]):
-                    if E[i,j]>=Emin:
-                        edge = pd.DataFrame({"x" : [k,k+1],"y": [y_scale(S[k][j]).item(),y_scale(S[k+1][i]).item()]})
-                        #figEdge = go.scatter.Line(x=[k,k+1],y=[y_scale(S[k][j]),y_scale(S[k+1][i])],fillcolor='grey')
+                    #fig.add_trace(figEdge)
+                    coeff = 1-(E[i,j]-Emin)/(E.max()-Emin)
+                    color = coeff.item()*np.array([120,120,120])+np.array([105,105,105])
+                    r,g,b=int(color[0]),int(color[1]),int(color[2])
+                    color = "rgb"+str((r,g,b))
+                    fig.add_scatter(x=edge["x"],y=edge["y"],marker={"color":color,"opacity":1},hovertext=str(adjacency[k][i,j])
+                                ,hoveron="fills",hoverinfo="text",text=str(adjacency[k][i,j]),showlegend=False ) 
 
-                        #fig.add_trace(figEdge)
-                        coeff = 1-(E[i,j]-Emin1)/(E.max()-Emin1) # A mieux faire 
-                        color = coeff.item()*np.array([120,120,120])+np.array([105,105,105])
-                        r,g,b=int(color[0]),int(color[1]),int(color[2])
-                        color = "rgb"+str((r,g,b))
-                        fig.add_scatter(x=edge["x"],y=edge["y"],marker={"color":color,"opacity":1},hovertext=str(adjacency[k][i,j])
-                                    ,hoveron="fills",hoverinfo="text",text=str(adjacency[k][i,j]),showlegend=False ) 
-
-                        if plotValue:
-                            middle_node_trace = go.Scatter(
-                                x=[np.array(edge["x"]).mean()],
-                                y=[np.array(edge["y"]).mean()],
-                                text=[str(adjacency[k][i,j])],
-                                mode='markers',
-                                hoverinfo='text',
-                                showlegend=False,
-                                marker=go.scatter.Marker(
-                                    opacity=0,
-                                    color='lightgrey'
-                                )
+                    if plotValue:
+                        middle_node_trace = go.Scatter(
+                            x=[np.array(edge["x"]).mean()],
+                            y=[np.array(edge["y"]).mean()],
+                            text=[str(adjacency[k][i,j])],
+                            mode='markers',
+                            hoverinfo='text',
+                            showlegend=False,
+                            marker=go.scatter.Marker(
+                                opacity=0,
+                                color='lightgrey'
                             )
+                        )
 
-                            fig.add_trace(middle_node_trace)
+                        fig.add_trace(middle_node_trace)
 
 
 
@@ -187,7 +188,6 @@ class SVR():
         base=0
         for i in range(len(S)):
             layer_i = pd.DataFrame({'x' : len(S[i])*[i], 'y': y_scale(S[i])})
-            df = layer_i
             base+=len(S[i])
             #fig.add_scatter(x=df["x"], y=df["y"])   
             if self.convolutional[i]:
@@ -196,18 +196,33 @@ class SVR():
                 color = node_color['fc']    
 
             node_trace = go.Scatter(
-                x=df["x"],
-                y=df["y"],
+                x=layer_i["x"],
+                y=layer_i["y"],
                 mode='markers',
                 showlegend=False,
                 marker=go.scatter.Marker(
-                    opacity=1,
-                    color = color
+                    color = color,
+                    opacity = self.node_intensity(i)
                 ))
 
             fig.add_trace(node_trace)
 
         return fig 
+
+    def node_intensity(self,layer):
+        """ This function returns an array with the same shape as self.S[layer] which contains coefficients between 0 and 1
+        Each coefficient corresponds to the importance of each mode measured by the max deviation of its cumulative scalar product 
+        distribution with respect to modes of the next layer"""
+        if layer==len(self.adjacency):
+            return torch.ones(self.S[layer].shape)
+        a = self.adjacency[layer]
+        n = self.arch[layer+1]
+        dim = 0
+        b = torch.ones(a.shape)
+        res = (n*a-b).cumsum(dim=dim).max(dim=dim)[0]
+        res = torch.nn.functional.relu(res)
+        return res/res.max()
+
 
     def plot(self,sigmaThreshold=3,y_scale=lambda x :x,nodeColor='blue',max_edges=100):
         fig = self._build_fig(sigmaThreshold,max_edges,y_scale)
