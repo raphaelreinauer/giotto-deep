@@ -8,11 +8,14 @@ from tqdm import tqdm
 import scipy.sparse.linalg
 from scipy.stats import chi2,norm
 import matplotlib.pyplot as plt 
+from matplotlib.colors import to_rgb as color2rgb
 
 
 class SVR():
-    def __init__(self,weights,method='svr',max_modes=128):
+    def __init__(self,weights,method='svr',max_modes=128,verbose=True):
         """ weights : a sequence of matrices representing successive linear maps 
+            max_modes : the maximum number of modes that are going to be computed during SVD of weights 
+            verbose : if True, the code will display progression bars during computations 
         """ 
 
         #Removing biases 
@@ -26,13 +29,18 @@ class SVR():
         self.arch = arch 
         self.method = method 
         self.max_modes = max_modes 
+        self.verbose = verbose 
 
         S = []
         V = []
         U = []
         K = []
         convolutional = []
-        for layer in tqdm(weights):
+        if self.verbose:
+            iterator = tqdm(weights)
+        else:
+            iterator = weights 
+        for layer in iterator:
             if len(layer.shape)==2:
                 u,s,v= self.svd(layer)
                 
@@ -111,7 +119,7 @@ class SVR():
         """ 
         sigmaThreshold : confidence threshold under which edges are not shown 
         y_scale : custom lambda function to rescale the plot in the y-dimension (default is identity)
-        nodeColor : what color is used for vertices
+        node_color : what color is used for vertices depending on the type of layer : (fc) is fully connected, (conv) is convolutional
         """ 
         S,arch,adjacency = self.S,self.arch,self.adjacency
         
@@ -129,7 +137,11 @@ class SVR():
         fig=go.Figure(layout=layout) 
 
         #Edges  
-        for k in tqdm(range(len(adjacency))):
+        if self.verbose:
+            iterator = tqdm(range(len(adjacency)))
+        else: 
+            iterator = (range(len(adjacency)))
+        for k in iterator:
             E=adjacency[k]
 
             mean = 1/arch[k+1]
@@ -152,9 +164,7 @@ class SVR():
             Fj = F.remainder(E.shape[1])
 
             for i,j in zip(Fi,Fj):
-                if E[i,j]<Emin:
-                    break
-                else:
+                if E[i,j]>=Emin:
                     edge = pd.DataFrame({"x" : [k,k+1],"y": [y_scale(S[k][j]).item(),y_scale(S[k+1][i]).item()]})
                     #figEdge = go.scatter.Line(x=[k,k+1],y=[y_scale(S[k][j]),y_scale(S[k+1][i])],fillcolor='grey')
 
@@ -184,16 +194,16 @@ class SVR():
 
 
 
-
+        grey = np.array(color2rgb('grey'))
         base=0
         for i in range(len(S)):
-            layer_i = pd.DataFrame({'x' : len(S[i])*[i], 'y': y_scale(S[i])})
+            layer_i = pd.DataFrame({'x' : len(S[i])*[i], 'y': y_scale(torch.flip(S[i],dims=[0]))})
             base+=len(S[i])
             #fig.add_scatter(x=df["x"], y=df["y"])   
             if self.convolutional[i]:
                 color = node_color['conv']
             else: 
-                color = node_color['fc']    
+                color = node_color['fc']
 
             node_trace = go.Scatter(
                 x=layer_i["x"],
@@ -201,8 +211,11 @@ class SVR():
                 mode='markers',
                 showlegend=False,
                 marker=go.scatter.Marker(
-                    color = color,
-                    opacity = self.node_intensity(i)
+                    color = torch.flip(self.node_intensity(i),dims=[0]),
+                    cmin = 0,
+                    cmax=1,
+                    colorscale = [[0, 'grey'], [1, color]],
+                    opacity = 1
                 ))
 
             fig.add_trace(node_trace)
@@ -234,6 +247,24 @@ class SVR():
         fig =  self._build_fig(sigmaThreshold,max_edges,y_scale)
         fig.write_image(path+'.png')
         
+    def argmax2d(self,res):
+        ymaxs = res.argmax(dim=1)
+        xrange = torch.tensor(range(res.shape[0]))
+        xmax = res[xrange,ymaxs[xrange]].argmax()
+        ymax = ymaxs[xmax]
+        return (xmax.item(),ymax.item())
+
+
+    def internal_dims(self,layer):
+        a = self.adjacency[layer]
+        wa =(self.adjacency[layer]).cumsum(dim=0).cumsum(dim=1)
+        ij = torch.ones(wa.shape).cumsum(dim=0).cumsum(dim=1)
+        n = self.arch[layer+1]
+        res = (n*wa-ij)
+        #plt.imshow(res)
+        #plt.show()
+        return self.argmax2d(res)
+
 
     def pathmetric(self,svdThreshold=0,svdScale=True):
         """ 
@@ -268,10 +299,10 @@ class SVR():
         return torch.tensordot(self.V[i+1].transpose(0,-1),self.U[i],1)
 
     def plot_filters(self,f):
-        """ Input : f with shape nb of channels, K, K 
-                    in that case f will be reshaped to a square-like configuration 
+        """ Input : f with shape nb of channels, K, K :
+                        in that case filters will be arranged into a square-like configuration 
                     f with shape h,w,K,K 
-                    in that case a w,h array of filters will be plotted """
+                        in that case a (w,h) array of filters will be plotted """
                     
         
         K = f.shape[-1]
