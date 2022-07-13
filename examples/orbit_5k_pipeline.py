@@ -1,7 +1,9 @@
 # %%
+from cProfile import label
 from dataclasses import dataclass
 import os
-from typing import Tuple
+from typing import List, Sequence, Tuple
+from numpy import ndarray
 
 import torch
 import torch.nn as nn
@@ -22,41 +24,40 @@ from gdeep.topology_layers.persformer_config import PoolerType
 from gdeep.trainer.trainer import Trainer
 from gdeep.search import HyperParameterOptimization
 from gdeep.utility import DEFAULT_GRAPH_DIR, PoolerType
+from gdeep.utility.constants import DEFAULT_DATA_DIR
 from gdeep.utility.utils import autoreload_if_notebook
 from sklearn.model_selection import train_test_split
 from torch.optim import Adam
 from torch.utils.data import Subset
 from torch.utils.tensorboard.writer import SummaryWriter
-from gdeep.data.datasets import OrbitsGenerator, DataLoaderKwargs
+from gdeep.data.datasets import OrbitsGenerator, DataLoaderKwargs, Orbit5kConfig
 
 autoreload_if_notebook()
 
 # %%
-@dataclass
-class Orbit5kConfig():
-    batch_size_train: int = 4
-    num_orbits_per_class: int = 32
-    validation_percentage: float = 0.0
-    test_percentage: float = 0.0
-    num_jobs: int = 8
-    dynamical_system: str = "classical_convention"
-    homology_dimensions: Tuple[int] = (0, 1)  # type: ignore
-    dtype: str = "float32"
-    arbitrary_precision: bool = False
 
-config_data = Orbit5kConfig()
+config_data = Orbit5kConfig(
+    num_orbits_per_class=1000,
+)
     
 
-og = OrbitsGenerator(
-    num_orbits_per_class=config_data.num_orbits_per_class,
-    homology_dimensions=config_data.homology_dimensions,
-    validation_percentage=config_data.validation_percentage,
-    test_percentage=config_data.test_percentage,
-    n_jobs=config_data.num_jobs,
-    dynamical_system=config_data.dynamical_system,
-    dtype=config_data.dtype,
-)
+og = OrbitsGenerator.from_config(config_data)
 
+dgs: ndarray = og.get_persistence_diagrams()  # type: ignore
+labels: ndarray = og.get_labels()
+
+output_dir = os.path.join(DEFAULT_DATA_DIR, "orbits_5k")
+
+label_list: List[Tuple[int, int]] = []
+for dg_idx in range(len(dgs)):
+    dg_one_hot = OneHotEncodedPersistenceDiagram(dgs[dg_idx])
+    
+    
+    label_list.append((dg_idx, labels[dg_idx]))
+
+
+
+# %%
 
 # Define the data loader
 
@@ -66,33 +67,30 @@ dataloaders_dicts = DataLoaderKwargs(
     test_kwargs={"batch_size": 3},
 )
 
-if len(config_data.homology_dimensions) == 0:
-    dl_train, _, _ = og.get_dataloader_orbits(dataloaders_dicts)
-else:
-    dl_train, _, _ = og.get_dataloader_persistence_diagrams(dataloaders_dicts)
+
+dl_train, _, _ = og.get_dataloader_persistence_diagrams(dataloaders_dicts)
     
 model_config = PersformerConfig(
-    input_size=2 + 2, # there are 2 coordinates and 2 homology dimensions
-    ouptut_size=5,  # there are 5 classes
+    input_size=2 + len(config_data.homology_dimensions), # there are 2 coordinates and 2 homology dimensions
+    output_size=len(config_data.parameters),  # there are 5 classes
     hidden_size=64,
     intermediate_size=128,
     num_attention_layers=2,
     num_attention_heads=8,
 )
-
 # %%
 
-# model = Persformer(model_config)
+model = Persformer(model_config)
 
-# writer = SummaryWriter()
+writer = SummaryWriter()
 
-# loss_function =  nn.CrossEntropyLoss()
+loss_function =  nn.CrossEntropyLoss()
 
-# trainer = Trainer(model, [dl_train], loss_function, writer)
+trainer = Trainer(model, [dl_train], loss_function, writer)
 
-# trainer.train(Adam, 3, False, 
-#               {"lr":0.01}, 
-#               {"batch_size":16})
+trainer.train(Adam, 10, False, 
+              {"lr":0.01}, 
+              {"batch_size":16})
     
     
 # %%

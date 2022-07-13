@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from typing import List, Sequence, Tuple, Union
 import numpy as np  # type: ignore
 import multiprocessing
@@ -24,6 +25,22 @@ class DataLoaderKwargs(object):
     
     def get_test_args(self):
         return self.test_kwargs
+    
+
+@dataclass
+class Orbit5kConfig():
+    parameters: Sequence[float] = (2.5, 3.5, 4.0, 4.1, 4.3)
+    batch_size_train: int = 4
+    num_orbits_per_class: int = 32
+    validation_percentage: float = 0.0
+    test_percentage: float = 0.0
+    num_jobs: int = 8
+    dynamical_system: str = "classical_convention"
+    homology_dimensions: Tuple[int] = (0, 1)  # type: ignore
+    dtype: str = "float32"
+    arbitrary_precision: bool = False    
+    
+
 class OrbitsGenerator(object):
     """Generate Orbit dataset consistent of orbits defined by the dynamical system
     x[n+1] = x[n] + r * y[n] * (1  - y[n]) % 1
@@ -100,6 +117,18 @@ class OrbitsGenerator(object):
         self._dtype = dtype
 
         self.arbitrary_precision = arbitrary_precision
+        
+    @staticmethod
+    def from_config(config: Orbit5kConfig) -> 'OrbitsGenerator':
+        return OrbitsGenerator(
+            num_orbits_per_class=config.num_orbits_per_class,
+            homology_dimensions=config.homology_dimensions,
+            validation_percentage=config.validation_percentage,
+            test_percentage=config.test_percentage,
+            n_jobs=config.num_jobs,
+            dynamical_system=config.dynamical_system,
+            dtype=config.dtype,
+        )
 
     def orbits_from_array(self, orbits):
         assert (orbits.shape[0] == self._num_orbits_per_class * self._num_classes and
@@ -346,6 +375,16 @@ class OrbitsGenerator(object):
                                        self._labels],  # type: ignore
                                        dataloaders_kwargs)
 
+    def get_labels(self) -> np.ndarray:
+        """Returns the labels as an ndarray of shape
+        (num_classes * num_orbits_per_class,)
+        Returns:
+            np.ndarray: 
+                Labels
+        """
+        assert self._labels is not None, ("Labels must be initialized first using"
+            "for example get_orbits")
+        return self._labels
 
 def generate_orbit_parallel(
     num_classes,

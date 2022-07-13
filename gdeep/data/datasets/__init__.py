@@ -9,7 +9,7 @@ from .dataset_for_image import ImageClassificationFromFiles
 from .dataset_form_array import FromArray
 from .dataloader_cloud import DlBuilderFromDataCloud
 from .parallel_orbit import generate_orbit_parallel, create_pd_orbits,\
-    OrbitsGenerator, DataLoaderKwargs
+    OrbitsGenerator, DataLoaderKwargs, Orbit5kConfig
 from .persistence_diagrams_from_files import PersistenceDiagramFromFiles,\
     collate_fn_persistence_diagrams
 
@@ -24,6 +24,7 @@ __all__ = [
     'generate_orbit_parallel',
     'create_pd_orbits',
     'OrbitsGenerator',
+    'Orbit5kConfig',
     'DataLoaderKwargs',
     'get_dataset',
     'ImageClassificationFromFiles',

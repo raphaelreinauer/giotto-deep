@@ -3,7 +3,8 @@ import torch.nn as nn
 from gdeep.topology_layers.pooling_layers import (AttentionPoolingLayer,
                                                   MaxPoolingLayer,
                                                   MeanPoolingLayer,
-                                                  SumPoolingLayer)
+                                                  SumPoolingLayer,
+                                                  SumAttentionPoolingLayer)
 from gdeep.utility.enum_types import ActivationFunction, PoolerType
 from torch.nn import Dropout, Linear, Module, Sequential
 
@@ -29,6 +30,8 @@ def get_pooling_layer(config: PersformerConfig) -> Module:
         return MeanPoolingLayer(config)  # type: ignore
     elif(config.pooler_type is PoolerType.SUM):
         return SumPoolingLayer(config)  # type: ignore
+    elif(config.pooler_type is PoolerType.SUM_ATTENTION):
+        return SumAttentionPoolingLayer(config)  # type: ignore
     else:
         raise ValueError(f"Pooler type {config.pooler_type} is not supported.")
 

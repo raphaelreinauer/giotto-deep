@@ -5,6 +5,7 @@ class PoolerType(Enum):
     MAX = auto()
     MEAN = auto()
     SUM = auto()
+    SUM_ATTENTION = auto()
 
 class LayerNormStyle(Enum):
     """
