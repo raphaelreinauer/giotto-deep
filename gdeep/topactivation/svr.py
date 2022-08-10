@@ -12,12 +12,47 @@ from matplotlib.colors import to_rgb as color2rgb
 
 
 class SVR():
-    def __init__(self,weights,method='svr',max_modes=128,verbose=True):
-        """ weights : a sequence of matrices representing successive linear maps 
-            max_modes : the maximum number of modes that are going to be computed during SVD of weights 
-            verbose : if True, the code will display progression bars during computations 
-        """ 
+    """
+    Singular Value Representation to represent the inner state of neural networks. 
 
+    Attributes
+    ---------
+    S (list of tensors) : 
+        List of 1D-tensors containing the singular values of each layer. 
+    U (list of tensors) : 
+        List of tensors representing the left singular vectors for each layer.
+    V (list of tensors) : 
+        List of tensors representing the left singular vectors for each layer.
+    adjacency : 
+        List of 2D-tensors representing the adjacency structure between 
+        consecutive linear maps. 
+    Reference
+    ---------
+    
+    """
+
+    def __init__(self,weights,method='svr',max_dim_svd=128,verbose=True):
+        """Compute the svr object. 
+
+        Arguments 
+        ---------
+        weights (list of tensors) :
+            A list representing successive linear maps with compatible 
+            shapes. 1D tensors are ignored, 4D tensors are considered 
+            as representing convolutional maps. 
+        max_dim_svd (int) :
+            The maximum number of spectral neurons per layer. It allows 
+            to reduce computation time. If max_dim_svd is greater than 
+            the maximum number of dimension (fully connected) / channels 
+            (convolutional layer), the full SVR is computed. 
+        method (string) : 
+            Default is 'svr', can also be set to 'cosvr' which is equivalent 
+            to reversing the order of weights and transposing input and 
+            output dimensions/channels for every tensor.  
+        verbose (boolean) :
+            If True, the code will display progression bars during 
+            computations. 
+        """ 
         #Removing biases 
         weights = [w for w in weights if len(w.shape)>1]
 
@@ -28,7 +63,7 @@ class SVR():
             arch.append(w.shape[0])
         self.arch = arch 
         self.method = method 
-        self.max_modes = max_modes 
+        self.max_dim_svd = max_dim_svd 
         self.verbose = verbose 
 
         S = []
@@ -96,10 +131,11 @@ class SVR():
             else: 
                 self.adjacency.append(a**2)
 
-
     def svd(self,A):
-        if min(A.shape)>self.max_modes:
-            u,s,vh = scipy.sparse.linalg.svds(A.cpu().numpy(),k=self.max_modes)
+        """ Compute the svd of matrix A.""" 
+
+        if min(A.shape)>self.max_dim_svd:
+            u,s,vh = scipy.sparse.linalg.svds(A.cpu().numpy(),k=self.max_dim_svd)
             v = torch.tensor(vh.T)
             u = torch.tensor(u)
             s = torch.tensor(s)
@@ -112,22 +148,17 @@ class SVR():
         
         return u,s,v 
 
+    def _build_fig(self,sigma_threshold,max_edges,y_scale,node_color = {'fc' : 'blue', 'conv':'red'},plotValue=False):
+        """Return a plotly figure depicting the SVR. """
 
-
-    def _build_fig(self,sigmaThreshold,max_edges,y_scale=lambda x :x,node_color = {'fc' : 'blue', 'conv':'red'},plotValue=False):
-
-        """ 
-        sigmaThreshold : confidence threshold under which edges are not shown 
-        y_scale : custom lambda function to rescale the plot in the y-dimension (default is identity)
-        node_color : what color is used for vertices depending on the type of layer : (fc) is fully connected, (conv) is convolutional
-        """ 
         S,arch,adjacency = self.S,self.arch,self.adjacency
         
         df = pd.DataFrame({})
         fig = px.scatter(df)
 
         layout = go.Layout(
-        title="Network SVR - Link minimum significance : "+str(sigmaThreshold)+ " sigma",
+        title="Network SVR - Link minimum significance : " + 
+            str(sigma_threshold)+ " sigma",
         xaxis=dict(
             title="Layer index"
         ),
@@ -155,7 +186,7 @@ class SVR():
 
             std = np.sqrt(2)*mean/kernel_size 
             z = int(np.round(kernel_size**2)) 
-            p = 1-norm.cdf(sigmaThreshold)
+            p = 1-norm.cdf(sigma_threshold)
 
             Emin = (chi2.ppf(1-p,z)/z)*mean #Probabilistic threshold 
             F = E.reshape(E.shape[0]*E.shape[1]).argsort(descending=True)[:max_edges] # Practical threshold against overload 
@@ -223,9 +254,13 @@ class SVR():
         return fig 
 
     def node_intensity(self,layer):
-        """ This function returns an array with the same shape as self.S[layer] which contains coefficients between 0 and 1
-        Each coefficient corresponds to the importance of each mode measured by the max deviation of its cumulative scalar product 
-        distribution with respect to modes of the next layer"""
+        """ Return an array with the same shape as 
+        self.S[layer] which contains coefficients between 0 and 1. 
+
+        Each coefficient corresponds to the importance of each mode
+        measured by the max deviation of its cumulative scalar product 
+        distribution with respect to modes of the next layer. """
+
         if layer==len(self.adjacency):
             return torch.ones(self.S[layer].shape)
         a = self.adjacency[layer]
@@ -236,26 +271,66 @@ class SVR():
         res = torch.nn.functional.relu(res)
         return res/res.max()
 
+    def plot(self,sigma_threshold=3, max_edges=100, y_scale=lambda x :x, node_color = {'fc' : 'blue', 'conv':'red'}):
+        """Plot the SVR representation. 
 
-    def plot(self,sigmaThreshold=3,y_scale=lambda x :x,nodeColor='blue',max_edges=100):
-        fig = self._build_fig(sigmaThreshold,max_edges,y_scale)
+        Arguments
+        ---------
+        sigma_threshold (float) : 
+            Confidence threshold under which edges are not shown. 
+            Under a null hypothesis, the probability of plotting an edge is given by :
+            p = 1-normal_cumulative_distribution_function(sigma_threshold)
+        max_edges (int) : 
+            The maximum number of edges to show between layers. 
+            Edges with highest adjacency coefficient are plotted.  
+        y_scale (lambda function) : 
+            Custom lambda function to rescale the plot in the y-dimension.
+            Default is identity.
+        node_color (dictionary) :
+            What color is used for vertices depending on the type of layer : 
+            'fc' is fully connected, 'conv' is convolutional
+        """ 
+
+        fig = self._build_fig(sigma_threshold,max_edges,y_scale,node_color)
         fig.show()
     
-    def plot_save(self,path,sigmaThreshold=3,y_scale=lambda x :x,nodeColor='blue',max_edges=100):
-        """ path : path used for saving the image (including filename) 
+    def plot_save(self,path, sigma_threshold=3,y_scale=lambda x :x,nodeColor='blue',max_edges=100):
+        """ Save the SVR representation plot to path. 
+
+        Arguments
+        ---------
+        path (string) : 
+            Path used for saving the image (including filename). 
+        sigma_threshold (float) : 
+            Confidence threshold under which edges are not shown. 
+            Under a null hypothesis, the probability of plotting an edge is given by :
+            p = 1-normal_cumulative_distribution_function(sigma_threshold)
+        max_edges (int) : 
+            The maximum number of edges to show between layers. 
+            Edges with highest adjacency coefficient are plotted.  
+        y_scale (lambda function) : 
+            Custom lambda function to rescale the plot in the y-dimension.
+            Default is identity.
+        node_color (dictionary) :
+            What color is used for vertices depending on the type of layer : 
+            'fc' is fully connected, 'conv' is convolutional
         """ 
-        fig =  self._build_fig(sigmaThreshold,max_edges,y_scale)
+
+        fig =  self._build_fig(sigma_threshold,max_edges,y_scale)
         fig.write_image(path+'.png')
         
-    def argmax2d(self,res):
-        ymaxs = res.argmax(dim=1)
-        xrange = torch.tensor(range(res.shape[0]))
-        xmax = res[xrange,ymaxs[xrange]].argmax()
+    def argmax2d(self,A):
+        """Return the indices corresponding to the maximum entry of 2D-tensor A.""" 
+
+        ymaxs = A.argmax(dim=1)
+        xrange = torch.tensor(range(A.shape[0]))
+        xmax = A[xrange,ymaxs[xrange]].argmax()
         ymax = ymaxs[xmax]
         return (xmax.item(),ymax.item())
 
-
     def internal_dims(self,layer):
+        """Compute the internal dimensions associated to self.adjacency[layer].""" 
+
         a = self.adjacency[layer]
         wa =(self.adjacency[layer]).cumsum(dim=0).cumsum(dim=1)
         ij = torch.ones(wa.shape).cumsum(dim=0).cumsum(dim=1)
@@ -265,21 +340,30 @@ class SVR():
         #plt.show()
         return self.argmax2d(res)
 
+    def pathmetric(self,sing_scale=True,sing_threshold=0):
+        """Compute the weighted average of all paths going from input to output.
 
-    def pathmetric(self,svdThreshold=0,svdScale=True):
+        Arguments
+        ---------
+        sing_scale (boolean): 
+            If True, singular values are taken into account, otherwise only 
+            self.adjacency matters. 
+        sing_threshold (float) : 
+            Discard all paths that cross a spectral neuron with a singular value 
+            below sing_threshold (default : 0) 
+
+        Return (float) : A metric which could be helpful in future work 
         """ 
-            svdThreshold : Discard all paths that cross a mode with a singular value below svdThreshold (default : 0)
-            svdScale : Paths receive 
-        """ 
+
         adjacency = [torch.abs(a) for a in self.adjacency]
         device = self.adjacency[0].device
         
-        if svdScale:
+        if sing_scale:
             S = [s.clone() for s in self.S]
         else: 
             S = [torch.ones(len(s)) for s in self.S]
             
-        S = [S[i]*(s>svdThreshold) for i,s in enumerate(self.S) ]
+        S = [S[i]*(s>sing_threshold) for i,s in enumerate(self.S) ]
         
         x = torch.ones(len(S[0])).to(device)
         for i in range(len(S)-1):
@@ -289,21 +373,34 @@ class SVR():
 
         return x.sum().item()
                 
-    def filters(self,i):
-        """ This function returns the effective filters that connects modes from consecutive convolutional layer  
-            Input : 
-                - i : layer index 
-            Returns :
-                an array (n,m) where m is the number of mode in layer i and n the number of modes in layer i+1
+    def adjacency_filters(self,layer):
+        """This function returns the effective filters that connect spectral neurons 
+        in consecutive convolutional layer.
+
+        Arguments
+        ---------
+        layer (int) : 
+            Layer index, the filters norm is already stored in self.adjacency[layer]. 
+        
+        Returns 
+        ---------
+        Array of shape (n,K,K,m) where m is the number of spectral neurons in layer i 
+        and n the number of spectral neurons in layer i+1. K is the convolutional 
+        kernel size. 
         """ 
-        return torch.tensordot(self.V[i+1].transpose(0,-1),self.U[i],1)
+
+        return torch.tensordot(self.V[layer+1].transpose(0,-1),self.U[layer],1)
 
     def plot_filters(self,f):
-        """ Input : f with shape nb of channels, K, K :
-                        in that case filters will be arranged into a square-like configuration 
-                    f with shape h,w,K,K 
-                        in that case a (w,h) array of filters will be plotted """
-                    
+        """Plot a collection of filters in an understandable way. 
+        
+        Arguments
+        ---------
+        f (tensor) :
+            If f has shape n, K, K : the  n filters will be arranged into a square-like
+            configuration.
+            If f has shape h,w,K,K 
+            A (w,h) array of filters will be plotted"""
         
         K = f.shape[-1]
         if len(f.shape)==3:
@@ -327,18 +424,11 @@ class SVR():
         plt.imshow(res)
         plt.show() 
 
-
     def entropy(self):
-        """ Returns an array of layer-wise entropy 
-        """ 
+        """Return an array containing the entropy of tensors in self.adjacency.""" 
+
         def H(x):
             y = torch.abs(x)
             return -(y*torch.log(y)).sum()
         
         return torch.tensor([H(a) for a in self.adjacency])
-
-
-
-
-    def L1(self):
-        return torch.tensor([(a).norm(1) for a in self.adjacency])
