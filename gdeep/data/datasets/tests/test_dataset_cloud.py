@@ -1,5 +1,6 @@
-from gdeep.data.datasets import DatasetCloud, dataset_cloud
+from gdeep.data.datasets import DatasetCloud
 
+import tempfile
 import hashlib
 import logging
 import os
@@ -10,6 +11,7 @@ from shutil import rmtree
 import numpy as np  # type: ignore
 import torch
 
+from gdeep.data.datasets.cloud import dataset_cloud
 from gdeep.utility.utils import get_checksum
 
 LOGGER = logging.getLogger(__name__)
@@ -19,33 +21,24 @@ LOGGER = logging.getLogger(__name__)
 def test_public_access():
     # Download a small dataset from Google Cloud Storage
     dataset = "SmallDataset"
-    download_directory = join("examples", "data", "DatasetCloud", "Tmp")
 
-    # Remove download directory recursively if it exists
-    if exists(download_directory):
-        rmtree(download_directory)
+    with tempfile.TemporaryDirectory() as download_directory:
+        dataset_cloud = DatasetCloud(
+            dataset, root_download_directory=download_directory, use_public_access=True
+        )
+        dataset_cloud.download()
 
-    # Create download directory
-    os.makedirs(download_directory, exist_ok=False)
+        # Check if the downloaded files (metadata.json, data.json, labels.json)
+        # are correct
+        checksums = {
+            "data.pt": "2ef68a718e29134cbcbf46c9592f6168",
+            "labels.pt": "d71992425033c6bf449d175db146a423",
+        }
 
-    dataset_cloud = DatasetCloud(
-        dataset, download_directory=download_directory, use_public_access=True
-    )
-    dataset_cloud.download()
-
-    # Check if the downloaded files (metadata.json, data.json, labels.json)
-    # are correct
-    checksums = {
-        "data.pt": "2ef68a718e29134cbcbf46c9592f6168",
-        "labels.pt": "d71992425033c6bf449d175db146a423",
-    }
-
-    for file in checksums.keys():
-        assert (
-            get_checksum(join(download_directory, dataset, file)) == checksums[file]
-        ), "File {} is corrupted.".format(file)
-    # Recursively remove download directory
-    rmtree(download_directory)
+        for file in checksums.keys():
+            assert (
+                get_checksum(join(download_directory, file)) == checksums[file]
+            ), "File {} is corrupted.".format(file)
 
 
 def test_get_dataset_list():
@@ -53,7 +46,7 @@ def test_get_dataset_list():
     # It's only used for initialization of the DatasetCloud object
     download_directory = ""
     dataset_cloud = DatasetCloud(
-        "SmallDataset", download_directory=download_directory, use_public_access=True
+        "SmallDataset", root_download_directory=download_directory, use_public_access=True
     )
     dataset_list = dataset_cloud.get_existing_datasets()
     assert len(dataset_list) > 0, "Dataset list is empty."
@@ -109,7 +102,7 @@ if "GOOGLE_APPLICATION_CREDENTIALS" in dict(environ):
             dataset_name = "TmpSmallDataset"
             dataset_cloud = DatasetCloud(
                 dataset_name,
-                download_directory=download_directory,
+                root_download_directory=download_directory,
                 use_public_access=False,
             )
 
