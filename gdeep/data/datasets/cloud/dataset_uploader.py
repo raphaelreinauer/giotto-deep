@@ -14,6 +14,8 @@ class DatasetUploader:
 
     def upload(self, dataset_name: str, metadata: Metadata, file_paths: list[str]) -> None:
         config_path = get_config_path(dataset_name)
+        if os.path.exists(config_path):
+            raise FileExistsError(f"Configuration file already exists for dataset: {dataset_name}, use update method instead")
         deposition = self.zenodo_client.create(data=metadata, paths=file_paths)
         deposition_id = deposition["id"]
         file_names = [file["filename"] for file in deposition["files"]]
